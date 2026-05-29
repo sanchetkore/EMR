@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+from app.schemas.prescription import PrescriptionItemCreate
 from datetime import datetime
 
 class EncounterBase(BaseModel):
@@ -8,6 +9,9 @@ class EncounterBase(BaseModel):
     appointment_id: Optional[int] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
+    quick_notes: Optional[str] = None
+    advice: Optional[str] = None
+    visit_number: Optional[int] = None
     status: Optional[str] = "Open"
 
 class EncounterCreate(EncounterBase):
@@ -19,3 +23,85 @@ class Encounter(EncounterBase):
     created_at: datetime
     class Config:
         orm_mode = True
+
+class VitalConfigurationBase(BaseModel):
+    name: str
+    data_type: str
+    formula: Optional[str] = None
+    is_active: Optional[bool] = True
+
+class VitalConfiguration(VitalConfigurationBase):
+    id: int
+    class Config:
+        orm_mode = True
+
+class PatientVitalBase(BaseModel):
+    vital_config_id: int
+    value: Optional[str] = None
+
+class PatientVital(PatientVitalBase):
+    id: int
+    encounter_id: int
+    class Config:
+        orm_mode = True
+
+class VisitComplaintBase(BaseModel):
+    complaint: str
+    from_date: Optional[str] = None
+    duration: Optional[str] = None
+
+class VisitComplaint(VisitComplaintBase):
+    id: int
+    encounter_id: int
+    class Config:
+        orm_mode = True
+
+class VisitDiagnosisBase(BaseModel):
+    diagnosis: str
+    date: Optional[str] = None
+
+class VisitDiagnosis(VisitDiagnosisBase):
+    id: int
+    encounter_id: int
+    class Config:
+        orm_mode = True
+
+class VisitTreatmentBase(BaseModel):
+    treatment: str
+    due_date: Optional[str] = None
+
+class VisitTreatment(VisitTreatmentBase):
+    id: int
+    encounter_id: int
+    class Config:
+        orm_mode = True
+
+class VisitPayload(BaseModel):
+    # Encounter core data
+    patient_id: int
+    doctor_id: int
+    appointment_id: Optional[int] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    quick_notes: Optional[str] = None
+    advice: Optional[str] = None
+    
+    # Nested lists
+    vitals: List[PatientVitalBase] = []
+    complaints: List[VisitComplaintBase] = []
+    diagnoses: List[VisitDiagnosisBase] = []
+    treatments: List[VisitTreatmentBase] = []
+    
+    # Lab orders
+    lab_test_catalogs: List[int] = [] # List of catalog IDs to order
+    
+    # Prescriptions
+    prescriptions: List[PrescriptionItemCreate] = []
+
+class VisitResponse(BaseModel):
+    encounter: Encounter
+    vitals: List[PatientVital]
+    complaints: List[VisitComplaint]
+    diagnoses: List[VisitDiagnosis]
+    treatments: List[VisitTreatment]
+

@@ -24,6 +24,19 @@ class Patient(PatientBase):
     class Config:
         orm_mode = True
 
+class AppointmentStatusConfigBase(BaseModel):
+    name: str
+    color: Optional[str] = None
+    is_active: Optional[int] = 1
+
+class AppointmentStatusConfigCreate(AppointmentStatusConfigBase):
+    pass
+
+class AppointmentStatusConfig(AppointmentStatusConfigBase):
+    id: int
+    class Config:
+        orm_mode = True
+
 class AppointmentBase(BaseModel):
     patient_id: int
     doctor_id: int

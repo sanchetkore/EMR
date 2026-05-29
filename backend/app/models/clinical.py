@@ -50,10 +50,11 @@ class TemplateItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(Integer, ForeignKey("templates.id"))
     molecule = Column(String)
-    morning = Column(Boolean, default=False)
-    afternoon = Column(Boolean, default=False)
-    evening = Column(Boolean, default=False)
-    night = Column(Boolean, default=False)
+    morning = Column(String, nullable=True)
+    afternoon = Column(String, nullable=True)
+    evening = Column(String, nullable=True)
+    night = Column(String, nullable=True)
+    when = Column(String, nullable=True) # e.g. Before food, After food
     details = Column(String, nullable=True)
 
     template = relationship("Template", back_populates="items")

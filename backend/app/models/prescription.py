@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -21,11 +21,12 @@ class PrescriptionItem(Base):
     __tablename__ = "prescription_items"
     id = Column(Integer, primary_key=True, index=True)
     prescription_id = Column(Integer, ForeignKey("prescriptions.id"))
-    drug_name = Column(String)
-    dosage = Column(String)
-    frequency = Column(String)
-    duration = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=True)
-    instructions = Column(Text, nullable=True)
+    molecule = Column(String)
+    morning = Column(String, nullable=True)
+    afternoon = Column(String, nullable=True)
+    evening = Column(String, nullable=True)
+    night = Column(String, nullable=True)
+    when = Column(String, nullable=True) # e.g. Before food, After food
+    details = Column(Text, nullable=True)
     
     prescription = relationship("Prescription", back_populates="items")

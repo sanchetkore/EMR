@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.models.patient import Appointment
-from app.schemas.patient import Appointment as AppointmentSchema, AppointmentCreate
+from app.models.patient import Appointment, AppointmentStatusConfig
+from app.schemas.patient import Appointment as AppointmentSchema, AppointmentCreate, AppointmentStatusConfig as AppointmentStatusSchema, AppointmentStatusConfigCreate
 from app.api.deps import RequirePermission
 
 router = APIRouter()
@@ -11,6 +11,18 @@ router = APIRouter()
 from typing import List, Optional
 from datetime import date
 from sqlalchemy import cast, Date
+
+@router.get("/statuses", response_model=List[AppointmentStatusSchema], dependencies=[Depends(RequirePermission("view_appointments"))])
+def get_appointment_statuses(db: Session = Depends(get_db)):
+    return db.query(AppointmentStatusConfig).filter(AppointmentStatusConfig.is_active == 1).all()
+
+@router.post("/statuses", response_model=AppointmentStatusSchema, dependencies=[Depends(RequirePermission("manage_appointments"))])
+def create_appointment_status(status: AppointmentStatusConfigCreate, db: Session = Depends(get_db)):
+    db_status = AppointmentStatusConfig(**status.dict())
+    db.add(db_status)
+    db.commit()
+    db.refresh(db_status)
+    return db_status
 
 @router.get("/", response_model=List[AppointmentSchema], dependencies=[Depends(RequirePermission("view_appointments"))])
 def get_appointments(

@@ -44,6 +44,7 @@ def seed_db():
             "view_clinical": [doctor_role],
             "manage_billing": [frontdesk_role],
             "view_billing": [frontdesk_role],
+            "delete_billing": [admin_role], # NEW: Only admin can delete bills
             "manage_users": [admin_role],
             "manage_templates": [admin_role, doctor_role],
             "view_templates": [admin_role, doctor_role, frontdesk_role]
@@ -106,6 +107,31 @@ def seed_db():
             if not db_setting:
                 db_setting = SystemSetting(key=k, value=v)
                 db.add(db_setting)
+        db.commit()
+
+        # Seed Appointment Statuses
+        from app.models.patient import AppointmentStatusConfig
+        default_statuses = ["Scheduled", "Waiting", "Ongoing", "Completed", "Cancelled", "No Show"]
+        for status_name in default_statuses:
+            status_obj = db.query(AppointmentStatusConfig).filter(AppointmentStatusConfig.name == status_name).first()
+            if not status_obj:
+                db.add(AppointmentStatusConfig(name=status_name, color="#000000"))
+        db.commit()
+
+        # Seed Vital Configurations
+        from app.models.encounter import VitalConfiguration
+        default_vitals = [
+            {"name": "Blood Pressure", "data_type": "string", "formula": None},
+            {"name": "Temperature", "data_type": "float", "formula": None},
+            {"name": "Heart Rate", "data_type": "integer", "formula": None},
+            {"name": "Height (cm)", "data_type": "float", "formula": None},
+            {"name": "Weight (kg)", "data_type": "float", "formula": None},
+            {"name": "BMI", "data_type": "computed", "formula": "Weight (kg) / ((Height (cm)/100) * (Height (cm)/100))"}
+        ]
+        for v in default_vitals:
+            vital_obj = db.query(VitalConfiguration).filter(VitalConfiguration.name == v["name"]).first()
+            if not vital_obj:
+                db.add(VitalConfiguration(**v))
         db.commit()
 
     finally:

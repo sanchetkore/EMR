@@ -20,6 +20,13 @@ class Patient(Base):
     
     appointments = relationship("Appointment", back_populates="patient")
 
+class AppointmentStatusConfig(Base):
+    __tablename__ = "appointment_statuses"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    color = Column(String, nullable=True) # Optional hex color for UI
+    is_active = Column(Integer, default=1) # 1 active, 0 inactive
+
 class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(Integer, primary_key=True, index=True)

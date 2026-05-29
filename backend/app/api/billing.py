@@ -49,3 +49,15 @@ def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(ge
     db.commit()
     db.refresh(db_invoice)
     return db_invoice
+
+@router.delete("/{invoice_id}", dependencies=[Depends(RequirePermission("delete_billing"))])
+def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not db_invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    # Delete associated invoice items first to avoid foreign key constraint errors
+    db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
+    db.delete(db_invoice)
+    db.commit()
+    return {"detail": "Invoice and all associated items deleted successfully"}

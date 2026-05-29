@@ -3,12 +3,13 @@ from typing import Optional, List
 from datetime import datetime
 
 class PrescriptionItemBase(BaseModel):
-    drug_name: str
-    dosage: str
-    frequency: str
-    duration: Optional[str] = None
-    quantity: Optional[int] = None
-    instructions: Optional[str] = None
+    molecule: str
+    morning: Optional[str] = None
+    afternoon: Optional[str] = None
+    evening: Optional[str] = None
+    night: Optional[str] = None
+    when: Optional[str] = None
+    details: Optional[str] = None
 
 class PrescriptionItemCreate(PrescriptionItemBase):
     pass

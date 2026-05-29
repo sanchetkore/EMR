@@ -38,10 +38,11 @@ class Consultation(ConsultationBase):
 
 class TemplateItemBase(BaseModel):
     molecule: str
-    morning: bool = False
-    afternoon: bool = False
-    evening: bool = False
-    night: bool = False
+    morning: Optional[str] = None
+    afternoon: Optional[str] = None
+    evening: Optional[str] = None
+    night: Optional[str] = None
+    when: Optional[str] = None
     details: Optional[str] = None
 
 class TemplateItemCreate(TemplateItemBase):

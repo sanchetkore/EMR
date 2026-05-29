@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages
+from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs
 
 app = FastAPI(title="EMR Backend")
 
@@ -30,6 +30,8 @@ app.include_router(insurance.router, prefix="/api", tags=["insurance"])
 app.include_router(facilities.router, prefix="/api/facilities", tags=["facilities"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
+app.include_router(visits.router, prefix="/api/visits", tags=["visits"])
+app.include_router(drugs.router, prefix="/api/drugs", tags=["drugs"])
 
 @app.on_event("startup")
 def on_startup():
