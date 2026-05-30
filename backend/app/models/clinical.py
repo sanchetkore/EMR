@@ -4,6 +4,8 @@ from datetime import datetime
 from app.core.database import Base
 import enum
 
+
+
 class Vitals(Base):
     __tablename__ = "vitals"
     id = Column(Integer, primary_key=True, index=True)

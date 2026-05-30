@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
-from app.schemas.user import User
+from app.schemas.user import User, UserBasic
 
 class PatientBase(BaseModel):
     first_name: str
@@ -37,9 +37,23 @@ class AppointmentStatusConfig(AppointmentStatusConfigBase):
     class Config:
         orm_mode = True
 
+class AppointmentTypeConfigBase(BaseModel):
+    name: str
+    rate: float = 0.0
+    is_active: Optional[int] = 1
+
+class AppointmentTypeConfigCreate(AppointmentTypeConfigBase):
+    pass
+
+class AppointmentTypeConfig(AppointmentTypeConfigBase):
+    id: int
+    class Config:
+        orm_mode = True
+
 class AppointmentBase(BaseModel):
     patient_id: int
     doctor_id: int
+    appointment_type_id: Optional[int] = None
     appointment_time: datetime
     status: Optional[str] = "Scheduled"
 
@@ -49,6 +63,7 @@ class AppointmentCreate(AppointmentBase):
 class Appointment(AppointmentBase):
     id: int
     patient: Optional[Patient] = None
-    doctor: Optional[User] = None
+    doctor: Optional[UserBasic] = None
+    appointment_type: Optional[AppointmentTypeConfig] = None
     class Config:
         orm_mode = True

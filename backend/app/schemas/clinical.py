@@ -95,3 +95,15 @@ class Invoice(InvoiceBase):
     items: list[InvoiceItem] = []
     class Config:
         orm_mode = True
+
+class BillSuggestionItem(BaseModel):
+    service_name: str
+    quantity: int = 1
+    unit_price: float
+    total_price: float
+
+class BillSuggestion(BaseModel):
+    appointment_id: int
+    patient_id: int
+    items: List[BillSuggestionItem] = []
+    total_amount: float

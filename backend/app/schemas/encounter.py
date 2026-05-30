@@ -85,6 +85,7 @@ class VisitPayload(BaseModel):
     notes: Optional[str] = None
     quick_notes: Optional[str] = None
     advice: Optional[str] = None
+    status: Optional[str] = "Open"
     
     # Nested lists
     vitals: List[PatientVitalBase] = []

@@ -59,3 +59,57 @@ def delete_patient(patient_id: int, db: Session = Depends(get_db)):
     db_patient.is_active = 0 # soft delete
     db.commit()
     return {"detail": "Patient deleted successfully"}
+
+# --- Medical History: Allergies ---
+from app.models.allergy import Allergy
+from app.models.medical_problem import MedicalProblem
+from app.schemas.allergy import Allergy as AllergySchema, AllergyCreate
+from app.schemas.medical_problem import MedicalProblem as ConditionSchema, MedicalProblemCreate as ConditionCreate
+
+@router.get("/{patient_id}/allergies", response_model=List[AllergySchema], dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_patient_allergies(patient_id: int, db: Session = Depends(get_db)):
+    return db.query(Allergy).filter(Allergy.patient_id == patient_id).all()
+
+@router.post("/{patient_id}/allergies", response_model=AllergySchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
+def create_patient_allergy(patient_id: int, allergy: AllergyCreate, db: Session = Depends(get_db)):
+    if allergy.patient_id != patient_id:
+        raise HTTPException(status_code=400, detail="Patient ID mismatch")
+    db_allergy = Allergy(**allergy.dict())
+    db.add(db_allergy)
+    db.commit()
+    db.refresh(db_allergy)
+    return db_allergy
+
+@router.delete("/allergies/{allergy_id}", dependencies=[Depends(RequirePermission("manage_clinical"))])
+def delete_allergy(allergy_id: int, db: Session = Depends(get_db)):
+    db_allergy = db.query(Allergy).filter(Allergy.id == allergy_id).first()
+    if not db_allergy:
+        raise HTTPException(status_code=404, detail="Allergy not found")
+    db.delete(db_allergy)
+    db.commit()
+    return {"detail": "Allergy deleted successfully"}
+
+# --- Medical History: Conditions (Medical Problems) ---
+
+@router.get("/{patient_id}/conditions", response_model=List[ConditionSchema], dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_patient_conditions(patient_id: int, db: Session = Depends(get_db)):
+    return db.query(MedicalProblem).filter(MedicalProblem.patient_id == patient_id).all()
+
+@router.post("/{patient_id}/conditions", response_model=ConditionSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
+def create_patient_condition(patient_id: int, condition: ConditionCreate, db: Session = Depends(get_db)):
+    if condition.patient_id != patient_id:
+        raise HTTPException(status_code=400, detail="Patient ID mismatch")
+    db_condition = MedicalProblem(**condition.dict())
+    db.add(db_condition)
+    db.commit()
+    db.refresh(db_condition)
+    return db_condition
+
+@router.delete("/conditions/{condition_id}", dependencies=[Depends(RequirePermission("manage_clinical"))])
+def delete_condition(condition_id: int, db: Session = Depends(get_db)):
+    db_condition = db.query(MedicalProblem).filter(MedicalProblem.id == condition_id).first()
+    if not db_condition:
+        raise HTTPException(status_code=404, detail="Condition not found")
+    db.delete(db_condition)
+    db.commit()
+    return {"detail": "Condition deleted successfully"}

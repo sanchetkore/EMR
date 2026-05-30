@@ -20,6 +20,13 @@ class Patient(Base):
     
     appointments = relationship("Appointment", back_populates="patient")
 
+class AppointmentTypeConfig(Base):
+    __tablename__ = "appointment_types"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    rate = Column(Float, default=0.0)
+    is_active = Column(Integer, default=1) # 1 active, 0 inactive
+
 class AppointmentStatusConfig(Base):
     __tablename__ = "appointment_statuses"
     id = Column(Integer, primary_key=True, index=True)
@@ -32,10 +39,12 @@ class Appointment(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
     doctor_id = Column(Integer, ForeignKey("users.id")) # user with doctor role
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
     appointment_time = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("User")
+    appointment_type = relationship("AppointmentTypeConfig")
     consultation = relationship("Consultation", back_populates="appointment", uselist=False)
     vitals = relationship("Vitals", back_populates="appointment", uselist=False)

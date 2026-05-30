@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models.clinical import Invoice
-from app.schemas.clinical import Invoice as InvoiceSchema, InvoiceCreate
+from app.models.clinical import Invoice, InvoiceItem
+from app.models.patient import Appointment
+from app.models.lab_result import LabResult
+from app.schemas.clinical import Invoice as InvoiceSchema, InvoiceCreate, BillSuggestion, BillSuggestionItem
 from app.api.deps import RequirePermission
 
 router = APIRouter()
@@ -56,8 +58,50 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     if not db_invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    # Delete associated invoice items first to avoid foreign key constraint errors
     db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
     db.delete(db_invoice)
     db.commit()
     return {"detail": "Invoice and all associated items deleted successfully"}
+
+@router.get("/suggest/{appointment_id}", response_model=BillSuggestion, dependencies=[Depends(RequirePermission("manage_billing"))])
+def suggest_bill(appointment_id: int, db: Session = Depends(get_db)):
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    items = []
+    total = 0.0
+    
+    # 1. Add Appointment Consultation Fee
+    if appointment.appointment_type:
+        rate = appointment.appointment_type.rate
+        items.append(BillSuggestionItem(
+            service_name=f"Consultation ({appointment.appointment_type.name})",
+            quantity=1,
+            unit_price=rate,
+            total_price=rate
+        ))
+        total += rate
+        
+    # 2. Find any Lab Tests ordered during this appointment's encounter
+    # We find the encounter for this appointment first
+    if appointment.consultation:
+        encounter_id = appointment.consultation.encounter_id
+        labs = db.query(LabResult).filter(LabResult.encounter_id == encounter_id).all()
+        for lab in labs:
+            if lab.catalog and lab.catalog.price > 0:
+                price = lab.catalog.price
+                items.append(BillSuggestionItem(
+                    service_name=f"Lab Test: {lab.test_name}",
+                    quantity=1,
+                    unit_price=price,
+                    total_price=price
+                ))
+                total += price
+                
+    return BillSuggestion(
+        appointment_id=appointment.id,
+        patient_id=appointment.patient_id,
+        items=items,
+        total_amount=total
+    )
