@@ -8,6 +8,7 @@ class PatientBase(BaseModel):
     last_name: str
     dob: date
     gender: str
+    language: Optional[str] = None
     contact_number: str
     email: Optional[str] = None
     blood_group: Optional[str] = None

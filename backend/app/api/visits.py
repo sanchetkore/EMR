@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.encounter import Encounter, PatientVital, VisitComplaint, VisitDiagnosis, VisitTreatment, VitalConfiguration
 from app.models.lab_result import LabResult, LabCatalog
 from app.models.prescription import Prescription, PrescriptionItem
-from app.schemas.encounter import VisitPayload, VisitResponse, VitalConfiguration as VitalConfigurationSchema, VitalConfigurationBase
+from app.schemas.encounter import VisitPayload, VisitResponse, VitalConfiguration as VitalConfigurationSchema, VitalConfigurationBase, VisitUpdate
+from app.schemas.encounter import Encounter as EncounterSchema, PatientVital as PatientVitalSchema, VisitComplaint as VisitComplaintSchema, VisitDiagnosis as VisitDiagnosisSchema, VisitTreatment as VisitTreatmentSchema
 from app.api.deps import RequirePermission
 
 router = APIRouter()
@@ -31,29 +32,14 @@ def get_last_visit(patient_id: int, db: Session = Depends(get_db)):
     if not encounter:
         raise HTTPException(status_code=404, detail="No previous visits found for this patient")
         
-    return VisitResponse(
-        encounter=encounter,
-        vitals=encounter.vitals,
-        complaints=encounter.complaints,
-        diagnoses=encounter.diagnoses,
-        treatments=encounter.treatments
-    )
+    return _build_visit_response(encounter)
 
 @router.get("/history/{patient_id}", response_model=List[VisitResponse], dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_visit_history(patient_id: int, limit: int = 6, db: Session = Depends(get_db)):
     # Find the most recent encounters for this patient, up to the limit (default 6)
     encounters = db.query(Encounter).filter(Encounter.patient_id == patient_id).order_by(Encounter.encounter_date.desc()).limit(limit).all()
     
-    history = []
-    for enc in encounters:
-        history.append(VisitResponse(
-            encounter=enc,
-            vitals=enc.vitals,
-            complaints=enc.complaints,
-            diagnoses=enc.diagnoses,
-            treatments=enc.treatments
-        ))
-    return history
+    return [_build_visit_response(enc) for enc in encounters]
 
 @router.post("/", response_model=VisitResponse, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def create_visit(payload: VisitPayload, db: Session = Depends(get_db)):
@@ -71,7 +57,11 @@ def create_visit(payload: VisitPayload, db: Session = Depends(get_db)):
         quick_notes=payload.quick_notes,
         advice=payload.advice,
         visit_number=visit_num,
-        status=payload.status
+        status=payload.status,
+        followup_days=payload.followup_days,
+        followup_date=payload.followup_date if payload.followup_date else (
+            (datetime.utcnow() + timedelta(days=payload.followup_days)).date() if payload.followup_days else None
+        )
     )
     db.add(db_encounter)
     db.flush() # flush to get the encounter id without committing the transaction yet
@@ -146,10 +136,37 @@ def create_visit(payload: VisitPayload, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_encounter)
     
+    return _build_visit_response(db_encounter)
+
+@router.put("/{encounter_id}", response_model=VisitResponse, dependencies=[Depends(RequirePermission("manage_clinical"))])
+def update_visit(encounter_id: int, payload: VisitUpdate, db: Session = Depends(get_db)):
+    db_encounter = db.query(Encounter).filter(Encounter.id == encounter_id).first()
+    if not db_encounter:
+        raise HTTPException(status_code=404, detail="Visit not found")
+        
+    update_data = payload.dict(exclude_unset=True)
+    
+    # Handle followup date auto-calculation if days are provided but date is not
+    if "followup_days" in update_data and "followup_date" not in update_data:
+        if update_data["followup_days"] is not None:
+            update_data["followup_date"] = (datetime.utcnow() + timedelta(days=update_data["followup_days"])).date()
+        else:
+            update_data["followup_date"] = None
+            
+    for key, value in update_data.items():
+        setattr(db_encounter, key, value)
+        
+    db.commit()
+    db.refresh(db_encounter)
+    
+    return _build_visit_response(db_encounter)
+
+def _build_visit_response(encounter):
+    """Convert ORM encounter and its relations into a VisitResponse dict."""
     return VisitResponse(
-        encounter=db_encounter,
-        vitals=db_encounter.vitals,
-        complaints=db_encounter.complaints,
-        diagnoses=db_encounter.diagnoses,
-        treatments=db_encounter.treatments
+        encounter=EncounterSchema.model_validate(encounter, from_attributes=True),
+        vitals=[PatientVitalSchema.model_validate(v, from_attributes=True) for v in encounter.vitals],
+        complaints=[VisitComplaintSchema.model_validate(c, from_attributes=True) for c in encounter.complaints],
+        diagnoses=[VisitDiagnosisSchema.model_validate(d, from_attributes=True) for d in encounter.diagnoses],
+        treatments=[VisitTreatmentSchema.model_validate(t, from_attributes=True) for t in encounter.treatments],
     )

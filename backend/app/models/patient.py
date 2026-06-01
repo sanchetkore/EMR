@@ -10,6 +10,7 @@ class Patient(Base):
     last_name = Column(String, index=True)
     dob = Column(Date)
     gender = Column(String)
+    language = Column(String, nullable=True)
     contact_number = Column(String)
     email = Column(String, unique=True, index=True, nullable=True)
     blood_group = Column(String, nullable=True)

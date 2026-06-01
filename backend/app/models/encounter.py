@@ -16,6 +16,8 @@ class Encounter(Base):
     quick_notes = Column(Text, nullable=True)
     advice = Column(Text, nullable=True)
     status = Column(String, default="Open") # Open, Closed
+    followup_days = Column(Integer, nullable=True)
+    followup_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     patient = relationship("Patient")

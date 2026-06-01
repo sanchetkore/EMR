@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, Date
 from typing import List, Optional
 from datetime import datetime
 from app.core.database import get_db
@@ -10,11 +11,14 @@ from app.api.deps import RequirePermission
 
 router = APIRouter()
 
-@router.get("/lab_catalog", response_model=List[LabCatalogSchema], dependencies=[Depends(RequirePermission("view_clinical"))])
-def get_lab_catalog(db: Session = Depends(get_db)):
-    return db.query(LabCatalog).all()
+@router.get("/lab_results/lab_catalog", response_model=List[LabCatalogSchema], dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_lab_catalog(query: Optional[str] = None, db: Session = Depends(get_db)):
+    db_query = db.query(LabCatalog)
+    if query:
+        db_query = db_query.filter(LabCatalog.name.ilike(f"%{query}%"))
+    return db_query.all()
 
-@router.post("/lab_catalog", response_model=LabCatalogSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
+@router.post("/lab_results/lab_catalog", response_model=LabCatalogSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def create_lab_catalog_item(catalog_item: LabCatalogCreate, db: Session = Depends(get_db)):
     db_item = LabCatalog(**catalog_item.dict())
     db.add(db_item)
@@ -32,6 +36,21 @@ def get_lab_results_history(patient_id: int, test_name: Optional[str] = None, li
     if test_name:
         query = query.filter(LabResult.test_name == test_name)
     return query.order_by(LabResult.ordered_date.desc()).limit(limit).all()
+
+@router.get("/patients/{patient_id}/lab_results/latest", response_model=List[LabResultSchema], dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_latest_lab_results(patient_id: int, db: Session = Depends(get_db)):
+    """Fetch all lab results ordered on the most recent date for this patient."""
+    latest_result = db.query(LabResult).filter(LabResult.patient_id == patient_id).order_by(LabResult.ordered_date.desc()).first()
+    
+    if not latest_result:
+        return []
+        
+    latest_date = latest_result.ordered_date.date()
+    
+    return db.query(LabResult).filter(
+        LabResult.patient_id == patient_id,
+        cast(LabResult.ordered_date, Date) == latest_date
+    ).all()
 
 @router.post("/lab_results", response_model=LabResultSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def create_lab_result(lab_result: LabResultCreate, db: Session = Depends(get_db)):

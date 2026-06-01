@@ -83,7 +83,7 @@ class InvoiceItem(InvoiceItemBase):
 
 class InvoiceBase(BaseModel):
     patient_id: int
-    appointment_id: int
+    appointment_id: Optional[int] = None
     amount: float
     status: Optional[str] = "Pending"
 

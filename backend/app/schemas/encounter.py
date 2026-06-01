@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from app.schemas.prescription import PrescriptionItemCreate
-from datetime import datetime
+from datetime import datetime, date
 
 class EncounterBase(BaseModel):
     patient_id: int
@@ -13,6 +13,8 @@ class EncounterBase(BaseModel):
     advice: Optional[str] = None
     visit_number: Optional[int] = None
     status: Optional[str] = "Open"
+    followup_days: Optional[int] = None
+    followup_date: Optional[date] = None
 
 class EncounterCreate(EncounterBase):
     pass
@@ -86,6 +88,8 @@ class VisitPayload(BaseModel):
     quick_notes: Optional[str] = None
     advice: Optional[str] = None
     status: Optional[str] = "Open"
+    followup_days: Optional[int] = None
+    followup_date: Optional[date] = None
     
     # Nested lists
     vitals: List[PatientVitalBase] = []
@@ -99,10 +103,21 @@ class VisitPayload(BaseModel):
     # Prescriptions
     prescriptions: List[PrescriptionItemCreate] = []
 
+class VisitUpdate(BaseModel):
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    quick_notes: Optional[str] = None
+    advice: Optional[str] = None
+    status: Optional[str] = None
+    followup_days: Optional[int] = None
+    followup_date: Optional[date] = None
+
 class VisitResponse(BaseModel):
     encounter: Encounter
     vitals: List[PatientVital]
     complaints: List[VisitComplaint]
     diagnoses: List[VisitDiagnosis]
     treatments: List[VisitTreatment]
+    class Config:
+        orm_mode = True
 
