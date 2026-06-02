@@ -3,7 +3,8 @@ from typing import Optional, List
 from datetime import datetime
 
 class PrescriptionItemBase(BaseModel):
-    molecule: str
+    molecule: Optional[str] = ""
+    name: Optional[str] = ""
     morning: Optional[str] = None
     afternoon: Optional[str] = None
     evening: Optional[str] = None

@@ -1,11 +1,16 @@
 from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, List
 from datetime import datetime
+from app.schemas.patient import Patient
 
 class LabCatalogBase(BaseModel):
     name: str
     description: Optional[str] = None
     price: Optional[float] = 0.0
+    unit: Optional[str] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     is_active: Optional[bool] = True
 
 class LabCatalogCreate(LabCatalogBase):
@@ -39,3 +44,30 @@ class LabResult(LabResultBase):
     ordered_date: datetime
     class Config:
         orm_mode = True
+
+class LabOrderResponse(BaseModel):
+    lab_result: LabResult
+    patient: Optional[Patient] = None
+    class Config:
+        orm_mode = True
+
+class ComboLabTestBase(BaseModel):
+    name: str
+    test_ids: List[int]
+    price: Optional[float] = 0.0
+    is_active: Optional[bool] = True
+
+class ComboLabTestCreate(ComboLabTestBase):
+    pass
+
+class ComboLabTestSchema(ComboLabTestBase):
+    id: int
+    class Config:
+        orm_mode = True
+
+class OrderComboPayload(BaseModel):
+    patient_id: int
+    combo_id: int
+    encounter_id: Optional[int] = None
+    ordered_by: Optional[int] = None
+    ordered_date: Optional[datetime] = None

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from app.schemas.prescription import PrescriptionItemCreate
+from app.schemas.prescription import PrescriptionItemCreate, Prescription
+from app.schemas.patient import Appointment as AppointmentSchema
 from datetime import datetime, date
 
 class EncounterBase(BaseModel):
@@ -111,6 +112,8 @@ class VisitUpdate(BaseModel):
     status: Optional[str] = None
     followup_days: Optional[int] = None
     followup_date: Optional[date] = None
+    prescriptions: Optional[List[dict]] = None
+    lab_test_catalogs: Optional[List[int]] = None
 
 class VisitResponse(BaseModel):
     encounter: Encounter
@@ -118,6 +121,9 @@ class VisitResponse(BaseModel):
     complaints: List[VisitComplaint]
     diagnoses: List[VisitDiagnosis]
     treatments: List[VisitTreatment]
+    prescriptions: List[Prescription] = []
+    lab_results: List[dict] = [] # Returning dicts or a new schema
+    appointment: Optional[AppointmentSchema] = None
     class Config:
         orm_mode = True
 

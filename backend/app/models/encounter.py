@@ -28,6 +28,7 @@ class Encounter(Base):
     diagnoses = relationship("VisitDiagnosis", back_populates="encounter", cascade="all, delete-orphan")
     treatments = relationship("VisitTreatment", back_populates="encounter", cascade="all, delete-orphan")
     vitals = relationship("PatientVital", back_populates="encounter", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="encounter", cascade="all, delete-orphan")
 
 class VitalConfiguration(Base):
     __tablename__ = "vital_configurations"

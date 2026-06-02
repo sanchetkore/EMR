@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue
+from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic
+import os
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="EMR Backend")
 
@@ -33,6 +35,11 @@ app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
 app.include_router(visits.router, prefix="/api/visits", tags=["visits"])
 app.include_router(drugs.router, prefix="/api/drugs", tags=["drugs"])
 app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
+app.include_router(clinic.router, prefix="/api/clinic", tags=["clinic"])
+
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.on_event("startup")
 def on_startup():

@@ -30,6 +30,7 @@ class UserBase(BaseModel):
     email: EmailStr
     is_active: Optional[bool] = True
     role_id: Optional[int] = None
+    signature_path: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str

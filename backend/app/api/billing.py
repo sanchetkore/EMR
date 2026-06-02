@@ -42,6 +42,31 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Invoice not found")
     return db_invoice
 
+@router.put("/{invoice_id}", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
+def update_invoice(invoice_id: int, invoice_update: InvoiceCreate, db: Session = Depends(get_db)):
+    db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not db_invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    db_invoice.amount = invoice_update.amount
+    if invoice_update.status:
+        db_invoice.status = invoice_update.status
+    if invoice_update.appointment_id is not None:
+        db_invoice.appointment_id = invoice_update.appointment_id
+        
+    # Rebuild items
+    db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
+    db.flush()
+    
+    if invoice_update.items:
+        for item in invoice_update.items:
+            db_item = InvoiceItem(**item.dict(), invoice_id=db_invoice.id)
+            db.add(db_item)
+            
+    db.commit()
+    db.refresh(db_invoice)
+    return db_invoice
+
 @router.put("/{invoice_id}/status", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
 def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(get_db)):
     db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Text, Float, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Date, Text, Float, Boolean, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -9,6 +9,9 @@ class LabCatalog(Base):
     name = Column(String, index=True)
     description = Column(Text, nullable=True)
     price = Column(Float, default=0.0)
+    unit = Column(String, nullable=True)
+    min_value = Column(Float, nullable=True)
+    max_value = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True)
 
 class LabResult(Base):
@@ -32,3 +35,11 @@ class LabResult(Base):
     encounter = relationship("Encounter")
     orderer = relationship("User")
     catalog = relationship("LabCatalog")
+
+class ComboLabTest(Base):
+    __tablename__ = "combo_lab_tests"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    test_ids = Column(JSON) # List of catalog_ids
+    price = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)

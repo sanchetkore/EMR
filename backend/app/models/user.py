@@ -27,6 +27,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
+    signature_path = Column(String, nullable=True)
     role_id = Column(Integer, ForeignKey("roles.id"))
     
     role = relationship("Role", back_populates="users")

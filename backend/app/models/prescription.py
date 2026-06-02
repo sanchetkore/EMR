@@ -13,7 +13,7 @@ class Prescription(Base):
     notes = Column(Text, nullable=True)
     
     patient = relationship("Patient")
-    encounter = relationship("Encounter")
+    encounter = relationship("Encounter", back_populates="prescriptions")
     doctor = relationship("User")
     items = relationship("PrescriptionItem", back_populates="prescription", cascade="all, delete-orphan")
 

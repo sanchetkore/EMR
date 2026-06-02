@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
-from app.models import user, patient, clinical
+from app.models import user, patient, clinical, lab_result
 from app.core.security import get_password_hash
 
 def seed_db():
@@ -8,6 +8,7 @@ def seed_db():
     user.Base.metadata.create_all(bind=engine)
     patient.Base.metadata.create_all(bind=engine)
     clinical.Base.metadata.create_all(bind=engine)
+    lab_result.Base.metadata.create_all(bind=engine)
     
     from app.models.settings import SystemSetting
     SystemSetting.metadata.create_all(bind=engine)

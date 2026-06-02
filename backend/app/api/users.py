@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
+import os
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
@@ -51,12 +53,58 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         hashed_password=get_password_hash(user.password),
         role_id=user.role_id,
-        is_active=user.is_active
+        is_active=user.is_active,
+        signature_path=user.signature_path
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
+
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+SECURE_UPLOAD_DIR = "secure_uploads"
+if not os.path.exists(SECURE_UPLOAD_DIR):
+    os.makedirs(SECURE_UPLOAD_DIR)
+
+@router.post("/{user_id}/signature", response_model=UserSchema, dependencies=[Depends(RequirePermission("manage_users"))])
+async def upload_signature(
+    user_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    file_path = os.path.join(SECURE_UPLOAD_DIR, f"user_signature_{user_id}_{file.filename}")
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+        
+    if db_user.signature_path and os.path.exists(db_user.signature_path) and db_user.signature_path != file_path:
+        try:
+            os.remove(db_user.signature_path)
+        except Exception:
+            pass
+            
+    db_user.signature_path = file_path
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.get("/{user_id}/signature/image", dependencies=[Depends(get_current_user)])
+def get_signature_image(user_id: int, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user or not db_user.signature_path:
+        raise HTTPException(status_code=404, detail="Signature not found")
+        
+    if not os.path.exists(db_user.signature_path):
+        raise HTTPException(status_code=404, detail="Signature file not found on server")
+        
+    return FileResponse(db_user.signature_path)
 
 @router.get("/me", response_model=UserSchema)
 def read_users_me(current_user: User = Depends(get_current_user)):
