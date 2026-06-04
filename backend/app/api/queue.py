@@ -4,7 +4,7 @@ from app.core.database import get_db
 from app.models.patient import Appointment
 from app.models.prescription import Prescription
 from app.core.websocket import manager
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy import cast, Date
 
 router = APIRouter()
@@ -12,8 +12,12 @@ router = APIRouter()
 def get_live_queue(db: Session):
     # Get all appointments for today
     today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+    today_end = datetime.combine(today, datetime.max.time())
+    
     appointments = db.query(Appointment).filter(
-        cast(Appointment.appointment_time, Date) == today
+        Appointment.appointment_time >= today_start,
+        Appointment.appointment_time <= today_end
     ).order_by(Appointment.appointment_time.asc()).all()
 
     ongoing = []
@@ -47,7 +51,9 @@ def get_live_queue(db: Session):
             
     # Fetch prescriptions for the queue
     prescriptions = db.query(Prescription).filter(
-        Prescription.status != "Cancelled"
+        Prescription.status != "Cancelled",
+        Prescription.date_prescribed >= today_start,
+        Prescription.date_prescribed <= today_end
     ).all()
     
     pharmacy_waiting = []
@@ -55,9 +61,7 @@ def get_live_queue(db: Session):
     pharmacy_fulfilled = []
     
     for p in prescriptions:
-        # If Fulfilled, only show if from today
-        if p.status == "Fulfilled" and p.date_prescribed.date() != today:
-            continue
+        # We no longer need to check if Fulfilled is from today because the query ensures it
             
         patient_name = f"{p.patient.first_name} {p.patient.last_name}" if p.patient else "Unknown Patient"
         
