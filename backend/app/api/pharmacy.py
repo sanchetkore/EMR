@@ -41,13 +41,13 @@ def get_pharmacy_orders(status: Optional[str] = None, db: Session = Depends(get_
     else:
         query = query.filter(Prescription.status != "Cancelled")
         
-    # Only include Fulfilled orders if they are from today
+    # Only include Fulfilled and Picked Up orders if they are from today
     today = datetime.utcnow().date()
     query = query.filter(
         or_(
-            Prescription.status != "Fulfilled",
+            ~Prescription.status.in_(["Fulfilled", "Picked Up"]),
             and_(
-                Prescription.status == "Fulfilled",
+                Prescription.status.in_(["Fulfilled", "Picked Up"]),
                 cast(Prescription.date_prescribed, Date) == today
             )
         )
@@ -121,7 +121,7 @@ def update_order_status(order_id: int, payload: OrderStatusUpdate, background_ta
     if not p:
         raise HTTPException(status_code=404, detail="Order not found")
         
-    valid_statuses = ["Pending", "Processing", "Fulfilled", "Cancelled"]
+    valid_statuses = ["Pending", "Processing", "Fulfilled", "Cancelled", "Picked Up"]
     if payload.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {valid_statuses}")
         
