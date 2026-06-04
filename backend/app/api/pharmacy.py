@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, Date, or_, and_
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
 
 from app.core.database import get_db
 from app.models.prescription import Prescription
@@ -35,6 +36,20 @@ def get_pharmacy_orders(status: Optional[str] = None, db: Session = Depends(get_
     query = db.query(Prescription).order_by(Prescription.date_prescribed.desc())
     if status:
         query = query.filter(Prescription.status == status)
+    else:
+        query = query.filter(Prescription.status != "Cancelled")
+        
+    # Only include Fulfilled orders if they are from today
+    today = datetime.utcnow().date()
+    query = query.filter(
+        or_(
+            Prescription.status != "Fulfilled",
+            and_(
+                Prescription.status == "Fulfilled",
+                cast(Prescription.date_prescribed, Date) == today
+            )
+        )
+    )
     
     prescriptions = query.all()
     
