@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.patient import Appointment
+from app.models.prescription import Prescription
 from app.core.websocket import manager
 from datetime import date
 from sqlalchemy import cast, Date
@@ -44,9 +45,42 @@ def get_live_queue(db: Session):
         elif apt.status in ["Scheduled", "Waiting"]:
             waiting.append(payload)
             
+    # Fetch prescriptions for the queue
+    prescriptions = db.query(Prescription).filter(
+        Prescription.status != "Cancelled"
+    ).all()
+    
+    pharmacy_waiting = []
+    pharmacy_processing = []
+    pharmacy_fulfilled = []
+    
+    for p in prescriptions:
+        # If Fulfilled, only show if from today
+        if p.status == "Fulfilled" and p.date_prescribed.date() != today:
+            continue
+            
+        patient_name = f"{p.patient.first_name} {p.patient.last_name}" if p.patient else "Unknown Patient"
+        
+        rx_payload = {
+            "prescription_id": p.id,
+            "patient_name": patient_name,
+            "time": p.date_prescribed.strftime("%H:%M"),
+            "status": p.status
+        }
+        
+        if p.status == "Pending":
+            pharmacy_waiting.append(rx_payload)
+        elif p.status == "Processing":
+            pharmacy_processing.append(rx_payload)
+        elif p.status == "Fulfilled":
+            pharmacy_fulfilled.append(rx_payload)
+            
     return {
         "ongoing": ongoing,
-        "waiting": waiting
+        "waiting": waiting,
+        "pharmacy_waiting": pharmacy_waiting,
+        "pharmacy_processing": pharmacy_processing,
+        "pharmacy_fulfilled": pharmacy_fulfilled
     }
 
 @router.get("/live")

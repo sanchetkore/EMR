@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, Date, or_, and_
 from typing import List, Optional
@@ -13,6 +13,8 @@ from app.schemas.prescription import Prescription as PrescriptionSchema
 from app.schemas.patient import Patient as PatientSchema
 from app.schemas.user import User as UserSchema
 from app.api.deps import RequirePermission
+from app.core.websocket import manager
+from app.api.queue import get_live_queue
 
 router = APIRouter()
 
@@ -114,7 +116,7 @@ def get_pharmacy_order(order_id: int, db: Session = Depends(get_db)):
     )
 
 @router.put("/orders/{order_id}/status", response_model=PharmacyOrderResponse, dependencies=[Depends(RequirePermission("manage_pharmacy"))])
-def update_order_status(order_id: int, payload: OrderStatusUpdate, db: Session = Depends(get_db)):
+def update_order_status(order_id: int, payload: OrderStatusUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     p = db.query(Prescription).filter(Prescription.id == order_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -126,5 +128,9 @@ def update_order_status(order_id: int, payload: OrderStatusUpdate, db: Session =
     p.status = payload.status
     db.commit()
     db.refresh(p)
+    
+    # Broadcast queue update
+    queue_payload = get_live_queue(db)
+    background_tasks.add_task(manager.broadcast, queue_payload)
     
     return get_pharmacy_order(order_id, db)
