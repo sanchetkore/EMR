@@ -28,14 +28,14 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     db.refresh(db_invoice)
     return db_invoice
 
-@router.get("/", response_model=list[InvoiceSchema], dependencies=[Depends(RequirePermission("manage_billing"))])
+@router.get("/", response_model=list[InvoiceSchema], dependencies=[Depends(RequirePermission("view_billing"))])
 def get_invoices(patient_id: Optional[int] = None, db: Session = Depends(get_db)):
     query = db.query(Invoice)
     if patient_id:
         query = query.filter(Invoice.patient_id == patient_id)
     return query.all()
 
-@router.get("/{invoice_id}", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
+@router.get("/{invoice_id}", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("view_billing"))])
 def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not db_invoice:

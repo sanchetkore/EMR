@@ -43,5 +43,6 @@ class UserBasic(UserBase):
 class User(UserBase):
     id: int
     role: Optional[Role] = None
+    has_signature: Optional[bool] = False
     class Config:
         orm_mode = True

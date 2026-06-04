@@ -11,6 +11,7 @@ class Prescription(Base):
     doctor_id = Column(Integer, ForeignKey("users.id"))
     date_prescribed = Column(DateTime, default=datetime.utcnow)
     notes = Column(Text, nullable=True)
+    status = Column(String, default="Pending") # Pending, Processing, Fulfilled, Cancelled
     
     patient = relationship("Patient")
     encounter = relationship("Encounter", back_populates="prescriptions")

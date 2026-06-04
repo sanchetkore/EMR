@@ -31,8 +31,11 @@ def create_vital_config(config: VitalConfigurationBase, db: Session = Depends(ge
 
 @router.get("/last/{patient_id}", response_model=VisitResponse, dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_last_visit(patient_id: int, db: Session = Depends(get_db)):
-    # Find the most recent encounter for this patient
-    encounter = db.query(Encounter).filter(Encounter.patient_id == patient_id).order_by(Encounter.encounter_date.desc()).first()
+    # Find the most recent completed encounter for this patient
+    encounter = db.query(Encounter).filter(
+        Encounter.patient_id == patient_id,
+        Encounter.status == "Completed"
+    ).order_by(Encounter.encounter_date.desc()).first()
     
     if not encounter:
         raise HTTPException(status_code=404, detail="No previous visits found for this patient")
@@ -132,6 +135,7 @@ def create_visit(payload: VisitPayload, background_tasks: BackgroundTasks, db: S
         db_prescription = Prescription(
             patient_id=payload.patient_id,
             doctor_id=payload.doctor_id,
+            encounter_id=db_encounter.id,
             notes=f"Created during Visit #{visit_num}"
         )
         db.add(db_prescription)

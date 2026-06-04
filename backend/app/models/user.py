@@ -31,3 +31,7 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"))
     
     role = relationship("Role", back_populates="users")
+
+    @property
+    def has_signature(self) -> bool:
+        return bool(self.signature_path)

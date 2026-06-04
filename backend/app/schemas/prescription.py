@@ -26,6 +26,7 @@ class PrescriptionBase(BaseModel):
     encounter_id: Optional[int] = None
     doctor_id: int
     notes: Optional[str] = None
+    status: Optional[str] = "Pending"
 
 class PrescriptionCreate(PrescriptionBase):
     items: List[PrescriptionItemCreate] = []
