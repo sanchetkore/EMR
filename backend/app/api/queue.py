@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from datetime import datetime, timedelta, timezone
 from app.models.patient import Appointment
 from app.models.prescription import Prescription
 from app.core.websocket import manager
@@ -10,10 +11,12 @@ from sqlalchemy import cast, Date
 router = APIRouter()
 
 def get_live_queue(db: Session):
-    # Get all appointments for today
-    today = date.today()
-    today_start = datetime.combine(today, datetime.min.time())
-    today_end = datetime.combine(today, datetime.max.time())
+    # Calculate today's date using IST (UTC+5:30) to avoid UTC rollover issues
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now_ist = datetime.now(ist)
+    
+    today_start = datetime(now_ist.year, now_ist.month, now_ist.day, 0, 0, 0)
+    today_end = datetime(now_ist.year, now_ist.month, now_ist.day, 23, 59, 59)
     
     appointments = db.query(Appointment).filter(
         Appointment.appointment_time >= today_start,
@@ -39,6 +42,8 @@ def get_live_queue(db: Session):
         payload = {
             "appointment_id": apt.id,
             "patient_name": patient_name,
+            "opd_number": apt.patient.opd_number if apt.patient else None,
+            "token_number": apt.token_number,
             "doctor_name": doctor_name,
             "time": apt.appointment_time.strftime("%H:%M"),
             "status": apt.status
@@ -49,25 +54,26 @@ def get_live_queue(db: Session):
         elif apt.status in ["Scheduled", "Waiting"]:
             waiting.append(payload)
             
-    # Fetch prescriptions for the queue
+    # Fetch prescriptions for the queue, chronologically
     prescriptions = db.query(Prescription).filter(
-        Prescription.status != "Cancelled",
-        Prescription.date_prescribed >= today_start,
-        Prescription.date_prescribed <= today_end
-    ).all()
+        Prescription.status != "Cancelled"
+    ).order_by(Prescription.date_prescribed.asc()).all()
     
     pharmacy_waiting = []
     pharmacy_processing = []
     pharmacy_fulfilled = []
     
     for p in prescriptions:
-        # We no longer need to check if Fulfilled is from today because the query ensures it
+        # Skip Picked Up, they should disappear from the queue entirely
+        if p.status == "Picked Up":
+            continue
             
         patient_name = f"{p.patient.first_name} {p.patient.last_name}" if p.patient else "Unknown Patient"
         
         rx_payload = {
             "prescription_id": p.id,
             "patient_name": patient_name,
+            "opd_number": p.patient.opd_number if p.patient else None,
             "time": p.date_prescribed.strftime("%H:%M"),
             "status": p.status
         }
@@ -80,11 +86,11 @@ def get_live_queue(db: Session):
             pharmacy_fulfilled.append(rx_payload)
             
     return {
-        "ongoing": ongoing,
-        "waiting": waiting,
-        "pharmacy_waiting": pharmacy_waiting,
-        "pharmacy_processing": pharmacy_processing,
-        "pharmacy_fulfilled": pharmacy_fulfilled
+        "ongoing": ongoing[:10],
+        "waiting": waiting[:10],
+        "pharmacy_waiting": pharmacy_waiting[:10],
+        "pharmacy_processing": pharmacy_processing[:10],
+        "pharmacy_fulfilled": pharmacy_fulfilled[:10]
     }
 
 @router.get("/live")

@@ -11,7 +11,7 @@ from app.api.deps import RequirePermission
 router = APIRouter()
 
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import cast, Date
 
 @router.get("/types", response_model=List[AppointmentTypeSchema], dependencies=[Depends(RequirePermission("view_appointments"))])
@@ -59,7 +59,33 @@ def get_appointments(
 
 @router.post("/", response_model=AppointmentSchema, dependencies=[Depends(RequirePermission("manage_appointments"))])
 def create_appointment(appointment: AppointmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    db_appointment = Appointment(**appointment.dict())
+    # Auto-generate token_number based on the day of the appointment
+    apt_date = appointment.appointment_time.date()
+    
+    # We construct datetimes for start and end of that specific day
+    start_of_day = datetime.combine(apt_date, datetime.min.time())
+    end_of_day = datetime.combine(apt_date, datetime.max.time())
+    
+    # Find the max token number for that day
+    latest_apt = db.query(Appointment).filter(
+        Appointment.appointment_time >= start_of_day,
+        Appointment.appointment_time <= end_of_day,
+        Appointment.token_number != None
+    ).order_by(Appointment.token_number.desc()).first()
+    
+    if latest_apt and latest_apt.token_number:
+        try:
+            next_num = int(latest_apt.token_number) + 1
+            new_token = f"{next_num:03d}"
+        except ValueError:
+            new_token = "001"
+    else:
+        new_token = "001"
+
+    prescription_data = appointment.dict()
+    prescription_data['token_number'] = new_token
+    
+    db_appointment = Appointment(**prescription_data)
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)

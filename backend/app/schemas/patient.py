@@ -9,6 +9,7 @@ class PatientBase(BaseModel):
     dob: date
     gender: str
     language: Optional[str] = None
+    opd_number: Optional[str] = None
     contact_number: str
     email: Optional[str] = None
     blood_group: Optional[str] = None
@@ -57,6 +58,7 @@ class AppointmentBase(BaseModel):
     appointment_type_id: Optional[int] = None
     appointment_time: datetime
     status: Optional[str] = "Scheduled"
+    token_number: Optional[str] = None
 
 class AppointmentCreate(AppointmentBase):
     pass

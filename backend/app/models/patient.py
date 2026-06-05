@@ -11,6 +11,7 @@ class Patient(Base):
     dob = Column(Date)
     gender = Column(String)
     language = Column(String, nullable=True)
+    opd_number = Column(String, nullable=True)
     contact_number = Column(String)
     email = Column(String, unique=True, index=True, nullable=True)
     blood_group = Column(String, nullable=True)
@@ -43,6 +44,7 @@ class Appointment(Base):
     appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
     appointment_time = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
+    token_number = Column(String, nullable=True)
     
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("User")
