@@ -6,11 +6,11 @@ from app.models.patient import Appointment
 from app.models.lab_result import LabResult
 from app.schemas.clinical import Invoice as InvoiceSchema, InvoiceCreate, BillSuggestion, BillSuggestionItem
 from app.api.deps import RequirePermission
+from typing import Optional
+from datetime import date, datetime
+from sqlalchemy import cast, Date
 
 router = APIRouter()
-
-from typing import Optional
-from app.models.clinical import Invoice, InvoiceItem
 
 @router.post("/", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
 def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
@@ -29,10 +29,19 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     return db_invoice
 
 @router.get("/", response_model=list[InvoiceSchema], dependencies=[Depends(RequirePermission("view_billing"))])
-def get_invoices(patient_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_invoices(
+    patient_id: Optional[int] = None, 
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: Session = Depends(get_db)
+):
     query = db.query(Invoice)
     if patient_id:
         query = query.filter(Invoice.patient_id == patient_id)
+    if start_date:
+        query = query.filter(cast(Invoice.created_at, Date) >= start_date)
+    if end_date:
+        query = query.filter(cast(Invoice.created_at, Date) <= end_date)
     return query.all()
 
 @router.get("/{invoice_id}", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("view_billing"))])

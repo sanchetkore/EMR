@@ -68,6 +68,20 @@ class Appointment(AppointmentBase):
     patient: Optional[Patient] = None
     doctor: Optional[UserBasic] = None
     appointment_type: Optional[AppointmentTypeConfig] = None
+    last_visit_date: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class PatientAISummaryBase(BaseModel):
+    summary_text: str
+
+class PatientAISummaryCreate(PatientAISummaryBase):
+    patient_id: int
+
+class PatientAISummarySchema(PatientAISummaryBase):
+    id: int
+    patient_id: int
+    last_updated_at: datetime
     class Config:
         orm_mode = True
 

@@ -70,7 +70,18 @@ def get_appointments(
         )
         
     query = query.order_by(Appointment.appointment_time.asc())
-    return query.offset(skip).limit(limit).all()
+    appointments = query.offset(skip).limit(limit).all()
+    
+    # Calculate last_visit_date for each appointment
+    for appt in appointments:
+        last_apt = db.query(Appointment).filter(
+            Appointment.patient_id == appt.patient_id,
+            Appointment.status.notin_(["Cancelled", "No Show", "no show"]),
+            Appointment.appointment_time < appt.appointment_time
+        ).order_by(Appointment.appointment_time.desc()).first()
+        appt.last_visit_date = last_apt.appointment_time if last_apt else None
+        
+    return appointments
 
 @router.post("/", response_model=AppointmentSchema, dependencies=[Depends(RequirePermission("manage_appointments"))])
 def create_appointment(appointment: AppointmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

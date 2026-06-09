@@ -20,6 +20,14 @@ class RolePermission(Base):
     role_id = Column(Integer, ForeignKey("roles.id"), primary_key=True)
     permission_id = Column(Integer, ForeignKey("permissions.id"), primary_key=True)
 
+class UserTab(Base):
+    __tablename__ = "user_tabs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    tab_name = Column(String, index=True)
+    
+    user = relationship("User", back_populates="tabs")
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -31,7 +39,12 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"))
     
     role = relationship("Role", back_populates="users")
+    tabs = relationship("UserTab", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def has_signature(self) -> bool:
         return bool(self.signature_path)
+
+    @property
+    def visible_tabs(self):
+        return [t.tab_name for t in self.tabs]

@@ -4,8 +4,8 @@ import os
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.models.user import User, Role, Permission
-from app.schemas.user import User as UserSchema, UserCreate, Role as RoleSchema, RoleCreate, Permission as PermissionSchema, PermissionCreate
+from app.models.user import User, Role, Permission, UserTab
+from app.schemas.user import User as UserSchema, UserCreate, Role as RoleSchema, RoleCreate, Permission as PermissionSchema, PermissionCreate, UserTabsUpdate
 from app.api.deps import RequirePermission, get_current_user
 from app.core.security import get_password_hash
 
@@ -136,6 +136,23 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     db_user.is_active = False # soft delete
     db.commit()
     return {"detail": "User deactivated successfully"}
+
+@router.put("/{user_id}/tabs", response_model=UserSchema, dependencies=[Depends(RequirePermission("manage_users"))])
+def update_user_tabs(user_id: int, tabs_update: UserTabsUpdate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete existing tabs
+    db.query(UserTab).filter(UserTab.user_id == user_id).delete()
+    
+    # Insert new tabs
+    new_tabs = [UserTab(user_id=user_id, tab_name=t) for t in set(tabs_update.tab_names)]
+    db.add_all(new_tabs)
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
 
 @router.put("/roles/{role_id}", response_model=RoleSchema, dependencies=[Depends(RequirePermission("manage_users"))])
 def update_role(role_id: int, role_update: RoleCreate, db: Session = Depends(get_db)):
