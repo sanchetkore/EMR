@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import or_, desc
+from typing import List, Optional
 from app.core.database import get_db
-from app.models.patient import Patient
-from app.schemas.patient import Patient as PatientSchema, PatientCreate
+from app.models.patient import Patient, Appointment
+from app.models.prescription import Prescription
+from app.schemas.patient import (
+    Patient as PatientSchema, 
+    PatientCreate, 
+    Appointment as AppointmentSchema,
+    PatientAISummarySchema
+)
 from app.api.deps import RequirePermission
+from app.schemas.prescription import Prescription as PrescriptionSchema
 
 router = APIRouter()
-
-from sqlalchemy import or_
 
 @router.get("/", response_model=List[PatientSchema], dependencies=[Depends(RequirePermission("view_patients"))])
 def get_patients(search: str = None, db: Session = Depends(get_db)):
@@ -28,6 +34,13 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     db.add(db_patient)
     db.commit()
     db.refresh(db_patient)
+    
+    # Create initial "First Time" summary
+    from app.models.patient import PatientAISummary
+    db_summary = PatientAISummary(patient_id=db_patient.id, summary_text="First Time")
+    db.add(db_summary)
+    db.commit()
+    
     return db_patient
 
 @router.get("/{patient_id}", response_model=PatientSchema, dependencies=[Depends(RequirePermission("view_patients"))])
@@ -59,6 +72,25 @@ def delete_patient(patient_id: int, db: Session = Depends(get_db)):
     db_patient.is_active = 0 # soft delete
     db.commit()
     return {"detail": "Patient deleted successfully"}
+
+@router.get("/{patient_id}/prescriptions", response_model=List[PrescriptionSchema])
+def get_patient_prescriptions(patient_id: int, db: Session = Depends(get_db)):
+    db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not db_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    prescriptions = db.query(Prescription).filter(Prescription.patient_id == patient_id).order_by(Prescription.date_prescribed.desc()).all()
+    return prescriptions
+
+@router.get("/{patient_id}/ai_summary", response_model=Optional[PatientAISummarySchema])
+def get_patient_ai_summary(patient_id: int, db: Session = Depends(get_db)):
+    db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not db_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    from app.models.patient import PatientAISummary
+    summary = db.query(PatientAISummary).filter(PatientAISummary.patient_id == patient_id).first()
+    return summary
 
 # --- Medical History: Allergies ---
 from app.models.allergy import Allergy

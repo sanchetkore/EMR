@@ -15,6 +15,7 @@ class EncounterBase(BaseModel):
     visit_number: Optional[int] = None
     status: Optional[str] = "Open"
     followup_days: Optional[int] = None
+    followup_months: Optional[int] = None
     followup_date: Optional[date] = None
 
 class EncounterCreate(EncounterBase):
@@ -90,6 +91,7 @@ class VisitPayload(BaseModel):
     advice: Optional[str] = None
     status: Optional[str] = "Open"
     followup_days: Optional[int] = None
+    followup_months: Optional[int] = None
     followup_date: Optional[date] = None
     
     # Nested lists
@@ -111,6 +113,7 @@ class VisitUpdate(BaseModel):
     advice: Optional[str] = None
     status: Optional[str] = None
     followup_days: Optional[int] = None
+    followup_months: Optional[int] = None
     followup_date: Optional[date] = None
     prescriptions: Optional[List[dict]] = None
     lab_test_catalogs: Optional[List[int]] = None
@@ -127,3 +130,17 @@ class VisitResponse(BaseModel):
     class Config:
         orm_mode = True
 
+class FollowupResponse(BaseModel):
+    encounter_id: int
+    patient_id: int
+    patient_name: str
+    patient_phone: Optional[str] = None
+    doctor_name: str
+    last_visit_date: datetime
+    followup_date: date
+    followup_days: Optional[int] = None
+    reason: Optional[str] = None
+    visit_number: Optional[int] = None
+    
+    class Config:
+        orm_mode = True

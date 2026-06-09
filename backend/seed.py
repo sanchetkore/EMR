@@ -19,6 +19,7 @@ def seed_db():
         admin_role = db.query(user.Role).filter(user.Role.name == "Admin").first()
         doctor_role = db.query(user.Role).filter(user.Role.name == "Doctor").first()
         frontdesk_role = db.query(user.Role).filter(user.Role.name == "Frontdesk").first()
+        pharmacist_role = db.query(user.Role).filter(user.Role.name == "Pharmacist").first()
 
         roles_to_add = []
         if not admin_role:
@@ -30,6 +31,9 @@ def seed_db():
         if not frontdesk_role:
             frontdesk_role = user.Role(name="Frontdesk")
             roles_to_add.append(frontdesk_role)
+        if not pharmacist_role:
+            pharmacist_role = user.Role(name="Pharmacist")
+            roles_to_add.append(pharmacist_role)
         
         if roles_to_add:
             db.add_all(roles_to_add)
@@ -48,7 +52,10 @@ def seed_db():
             "delete_billing": [admin_role], # NEW: Only admin can delete bills
             "manage_users": [admin_role],
             "manage_templates": [admin_role, doctor_role],
-            "view_templates": [admin_role, doctor_role, frontdesk_role]
+            "view_templates": [admin_role, doctor_role, frontdesk_role],
+            "manage_pharmacy": [pharmacist_role],
+            "view_pharmacy": [pharmacist_role, doctor_role],
+            "view_dashboard": [admin_role, doctor_role, frontdesk_role]
         }
         
         for perm_name, roles in perms.items():
@@ -96,6 +103,18 @@ def seed_db():
             )
             db.add(frontdesk_user)
             db.commit()
+            
+        pharmacist_user = db.query(user.User).filter(user.User.username == "pharmacist").first()
+        if not pharmacist_user:
+            pharmacist_user = user.User(
+                username="pharmacist",
+                email="pharmacist@emr.com",
+                hashed_password=get_password_hash("pharmacist123"),
+                role_id=pharmacist_role.id
+            )
+            db.add(pharmacist_user)
+            db.commit()
+            
         # Create default system settings
         from app.models.settings import SystemSetting
         default_settings = {

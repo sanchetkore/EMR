@@ -9,6 +9,7 @@ class PatientBase(BaseModel):
     dob: date
     gender: str
     language: Optional[str] = None
+    opd_number: Optional[str] = None
     contact_number: str
     email: Optional[str] = None
     blood_group: Optional[str] = None
@@ -57,6 +58,7 @@ class AppointmentBase(BaseModel):
     appointment_type_id: Optional[int] = None
     appointment_time: datetime
     status: Optional[str] = "Scheduled"
+    token_number: Optional[str] = None
 
 class AppointmentCreate(AppointmentBase):
     pass
@@ -66,5 +68,19 @@ class Appointment(AppointmentBase):
     patient: Optional[Patient] = None
     doctor: Optional[UserBasic] = None
     appointment_type: Optional[AppointmentTypeConfig] = None
+    last_visit_date: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class PatientAISummaryBase(BaseModel):
+    summary_text: str
+
+class PatientAISummaryCreate(PatientAISummaryBase):
+    patient_id: int
+
+class PatientAISummarySchema(PatientAISummaryBase):
+    id: int
+    patient_id: int
+    last_updated_at: datetime
     class Config:
         orm_mode = True

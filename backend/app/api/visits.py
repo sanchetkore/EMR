@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from app.core.database import get_db
 from app.models.encounter import Encounter, PatientVital, VisitComplaint, VisitDiagnosis, VisitTreatment, VitalConfiguration
 from app.models.lab_result import LabResult, LabCatalog
@@ -9,7 +9,7 @@ from app.models.prescription import Prescription, PrescriptionItem
 from app.models.patient import Appointment
 from app.core.websocket import manager
 from app.api.queue import get_live_queue
-from app.schemas.encounter import VisitPayload, VisitResponse, VitalConfiguration as VitalConfigurationSchema, VitalConfigurationBase, VisitUpdate
+from app.schemas.encounter import VisitPayload, VisitResponse, VitalConfiguration as VitalConfigurationSchema, VitalConfigurationBase, VisitUpdate, FollowupResponse
 from app.schemas.encounter import Encounter as EncounterSchema, PatientVital as PatientVitalSchema, VisitComplaint as VisitComplaintSchema, VisitDiagnosis as VisitDiagnosisSchema, VisitTreatment as VisitTreatmentSchema
 from app.schemas.prescription import Prescription as PrescriptionSchema
 from app.schemas.patient import Appointment as AppointmentSchema
@@ -31,8 +31,11 @@ def create_vital_config(config: VitalConfigurationBase, db: Session = Depends(ge
 
 @router.get("/last/{patient_id}", response_model=VisitResponse, dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_last_visit(patient_id: int, db: Session = Depends(get_db)):
-    # Find the most recent encounter for this patient
-    encounter = db.query(Encounter).filter(Encounter.patient_id == patient_id).order_by(Encounter.encounter_date.desc()).first()
+    # Find the most recent completed encounter for this patient
+    encounter = db.query(Encounter).filter(
+        Encounter.patient_id == patient_id,
+        Encounter.status == "Completed"
+    ).order_by(Encounter.encounter_date.desc()).first()
     
     if not encounter:
         raise HTTPException(status_code=404, detail="No previous visits found for this patient")
@@ -73,7 +76,9 @@ def create_visit(payload: VisitPayload, background_tasks: BackgroundTasks, db: S
         status=payload.status,
         followup_days=payload.followup_days,
         followup_date=payload.followup_date if payload.followup_date else (
-            (datetime.utcnow() + timedelta(days=payload.followup_days)).date() if payload.followup_days else None
+            (datetime.utcnow() + timedelta(days=payload.followup_days)).date() if payload.followup_days else (
+                (datetime.utcnow() + timedelta(days=payload.followup_months * 30)).date() if payload.followup_months else None
+            )
         )
     )
     db.add(db_encounter)
@@ -132,6 +137,7 @@ def create_visit(payload: VisitPayload, background_tasks: BackgroundTasks, db: S
         db_prescription = Prescription(
             patient_id=payload.patient_id,
             doctor_id=payload.doctor_id,
+            encounter_id=db_encounter.id,
             notes=f"Created during Visit #{visit_num}"
         )
         db.add(db_prescription)
@@ -153,6 +159,23 @@ def create_visit(payload: VisitPayload, background_tasks: BackgroundTasks, db: S
     db.refresh(db_encounter)
     
     # Sync status to appointment
+    if payload.status == "Completed":
+        from app.services.ai_summary_service import background_ai_summary_task
+        import json
+        
+        new_data_dict = {
+            "visit_number": db_encounter.visit_number,
+            "complaints": [c.complaint for c in payload.complaints],
+            "diagnoses": [d.diagnosis for d in payload.diagnoses],
+            "treatments": [t.treatment for t in payload.treatments],
+            "notes": payload.notes
+        }
+        background_tasks.add_task(
+            background_ai_summary_task,
+            patient_id=db_encounter.patient_id,
+            new_data_str=f"Visit Date: {datetime.utcnow().date()}\n" + json.dumps(new_data_dict, indent=2)
+        )
+
     if payload.appointment_id and payload.status:
         db_appointment = db.query(Appointment).filter(Appointment.id == payload.appointment_id).first()
         if db_appointment:
@@ -174,12 +197,17 @@ def update_visit(encounter_id: int, payload: VisitUpdate, background_tasks: Back
     update_data = payload.dict(exclude_unset=True)
     prescriptions_data = update_data.pop("prescriptions", None)
     lab_test_catalogs_data = update_data.pop("lab_test_catalogs", None)    
-    # Handle followup date auto-calculation if days are provided but date is not
-    if "followup_days" in update_data and "followup_date" not in update_data:
-        if update_data["followup_days"] is not None:
+    # Handle followup date auto-calculation if days or months are provided but date is not
+    if "followup_date" not in update_data:
+        if update_data.get("followup_days") is not None:
             update_data["followup_date"] = (datetime.utcnow() + timedelta(days=update_data["followup_days"])).date()
-        else:
+        elif update_data.get("followup_months") is not None:
+            update_data["followup_date"] = (datetime.utcnow() + timedelta(days=update_data["followup_months"] * 30)).date()
+        elif "followup_days" in update_data or "followup_months" in update_data:
             update_data["followup_date"] = None
+            
+    # We no longer save followup_months in the DB, so remove it from update_data to prevent setattr errors
+    update_data.pop("followup_months", None)
             
     for key, value in update_data.items():
         setattr(db_encounter, key, value)
@@ -244,10 +272,30 @@ def update_visit(encounter_id: int, payload: VisitUpdate, background_tasks: Back
     db.refresh(db_encounter)
     
     # Sync status to appointment
-    if "status" in update_data and db_encounter.appointment_id:
+    if "status" in update_data and update_data["status"] == "Completed":
+        # Format the new visit data
+        from app.services.ai_summary_service import background_ai_summary_task
+        import json
+        
+        # Prepare a simple text representation of the new visit data
+        new_data_dict = {
+            "visit_number": db_encounter.visit_number,
+            "complaints": [c.complaint for c in db.query(VisitComplaint).filter(VisitComplaint.encounter_id == encounter_id).all()],
+            "diagnoses": [d.diagnosis for d in db.query(VisitDiagnosis).filter(VisitDiagnosis.encounter_id == encounter_id).all()],
+            "treatments": [t.treatment for t in db.query(VisitTreatment).filter(VisitTreatment.encounter_id == encounter_id).all()],
+            "notes": db_encounter.notes
+        }
+        
+        background_tasks.add_task(
+            background_ai_summary_task,
+            patient_id=db_encounter.patient_id,
+            new_data_str=f"Visit Date: {datetime.utcnow().date()}\n" + json.dumps(new_data_dict, indent=2)
+        )
+        
+    if db_encounter.status == "Completed" and db_encounter.appointment_id:
         db_appointment = db.query(Appointment).filter(Appointment.id == db_encounter.appointment_id).first()
-        if db_appointment:
-            db_appointment.status = update_data["status"]
+        if db_appointment and db_appointment.status != "Completed":
+            db_appointment.status = "Completed"
             db.commit()
             
             # Broadcast new queue to TVs
@@ -255,6 +303,56 @@ def update_visit(encounter_id: int, payload: VisitUpdate, background_tasks: Back
             background_tasks.add_task(manager.broadcast, queue_payload)
     
     return _build_visit_response(db_encounter, db)
+
+@router.get("/followups/upcoming", response_model=List[FollowupResponse], dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_upcoming_followups(
+    days: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    doctor_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Encounter).filter(Encounter.followup_date != None)
+    
+    if start_date:
+        query = query.filter(Encounter.followup_date >= start_date)
+    else:
+        # Default to today onwards
+        start_date = datetime.utcnow().date()
+        query = query.filter(Encounter.followup_date >= start_date)
+        
+    if days is not None:
+        end_date = start_date + timedelta(days=days)
+        
+    if end_date:
+        query = query.filter(Encounter.followup_date <= end_date)
+        
+    if doctor_id:
+        query = query.filter(Encounter.doctor_id == doctor_id)
+        
+    query = query.order_by(Encounter.followup_date.asc())
+    encounters = query.all()
+    
+    results = []
+    for enc in encounters:
+        patient_name = f"{enc.patient.first_name} {enc.patient.last_name}" if enc.patient else "Unknown"
+        patient_phone = enc.patient.contact_number if enc.patient else None
+        doctor_name = f"{enc.doctor.first_name} {enc.doctor.last_name}" if enc.doctor else "Unknown"
+        
+        results.append(FollowupResponse(
+            encounter_id=enc.id,
+            patient_id=enc.patient_id,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            doctor_name=doctor_name,
+            last_visit_date=enc.encounter_date,
+            followup_date=enc.followup_date,
+            followup_days=enc.followup_days,
+            reason=enc.reason,
+            visit_number=enc.visit_number
+        ))
+        
+    return results
 
 def _build_visit_response(encounter, db=None):
     """Convert ORM encounter and its relations into a VisitResponse dict."""

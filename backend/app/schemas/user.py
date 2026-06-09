@@ -11,6 +11,7 @@ class PermissionCreate(PermissionBase):
 class Permission(PermissionBase):
     id: int
     class Config:
+        from_attributes = True
         orm_mode = True
 
 class RoleBase(BaseModel):
@@ -23,7 +24,11 @@ class Role(RoleBase):
     id: int
     permissions: List[Permission] = []
     class Config:
+        from_attributes = True
         orm_mode = True
+
+class UserTabsUpdate(BaseModel):
+    tab_names: List[str]
 
 class UserBase(BaseModel):
     username: str
@@ -38,10 +43,15 @@ class UserCreate(UserBase):
 class UserBasic(UserBase):
     id: int
     class Config:
+        from_attributes = True
         orm_mode = True
 
 class User(UserBase):
     id: int
     role: Optional[Role] = None
+    has_signature: Optional[bool] = False
+    visible_tabs: List[str] = []
+
     class Config:
+        from_attributes = True
         orm_mode = True

@@ -4,15 +4,15 @@ from app.core.websocket import manager
 from app.api.queue import get_live_queue
 from typing import List
 from app.core.database import get_db
-from app.models.patient import Appointment, AppointmentStatusConfig, AppointmentTypeConfig
+from app.models.patient import Appointment, AppointmentStatusConfig, AppointmentTypeConfig, Patient
 from app.schemas.patient import Appointment as AppointmentSchema, AppointmentCreate, AppointmentStatusConfig as AppointmentStatusSchema, AppointmentStatusConfigCreate, AppointmentTypeConfig as AppointmentTypeSchema, AppointmentTypeConfigCreate
 from app.api.deps import RequirePermission
 
 router = APIRouter()
 
 from typing import List, Optional
-from datetime import date
-from sqlalchemy import cast, Date
+from datetime import date, datetime, timedelta, timezone
+from sqlalchemy import cast, Date, or_
 
 @router.get("/types", response_model=List[AppointmentTypeSchema], dependencies=[Depends(RequirePermission("view_appointments"))])
 def get_appointment_types(db: Session = Depends(get_db)):
@@ -44,6 +44,9 @@ def get_appointments(
     doctor_id: Optional[int] = None,
     appointment_date: Optional[date] = None,
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     query = db.query(Appointment)
@@ -55,11 +58,60 @@ def get_appointments(
         query = query.filter(cast(Appointment.appointment_time, Date) == appointment_date)
     if status:
         query = query.filter(Appointment.status == status)
-    return query.all()
+        
+    if search:
+        query = query.join(Patient).filter(
+            or_(
+                Patient.first_name.ilike(f"%{search}%"),
+                Patient.last_name.ilike(f"%{search}%"),
+                Patient.contact_number.ilike(f"%{search}%"),
+                Appointment.status.ilike(f"%{search}%")
+            )
+        )
+        
+    query = query.order_by(Appointment.appointment_time.asc())
+    appointments = query.offset(skip).limit(limit).all()
+    
+    # Calculate last_visit_date for each appointment
+    for appt in appointments:
+        last_apt = db.query(Appointment).filter(
+            Appointment.patient_id == appt.patient_id,
+            Appointment.status.notin_(["Cancelled", "No Show", "no show"]),
+            Appointment.appointment_time < appt.appointment_time
+        ).order_by(Appointment.appointment_time.desc()).first()
+        appt.last_visit_date = last_apt.appointment_time if last_apt else None
+        
+    return appointments
 
 @router.post("/", response_model=AppointmentSchema, dependencies=[Depends(RequirePermission("manage_appointments"))])
 def create_appointment(appointment: AppointmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    db_appointment = Appointment(**appointment.dict())
+    # Auto-generate token_number based on the day of the appointment
+    apt_date = appointment.appointment_time.date()
+    
+    # We construct datetimes for start and end of that specific day
+    start_of_day = datetime.combine(apt_date, datetime.min.time())
+    end_of_day = datetime.combine(apt_date, datetime.max.time())
+    
+    # Find the max token number for that day
+    latest_apt = db.query(Appointment).filter(
+        Appointment.appointment_time >= start_of_day,
+        Appointment.appointment_time <= end_of_day,
+        Appointment.token_number != None
+    ).order_by(Appointment.token_number.desc()).first()
+    
+    if latest_apt and latest_apt.token_number:
+        try:
+            next_num = int(latest_apt.token_number) + 1
+            new_token = f"{next_num:03d}"
+        except ValueError:
+            new_token = "001"
+    else:
+        new_token = "001"
+
+    prescription_data = appointment.dict()
+    prescription_data['token_number'] = new_token
+    
+    db_appointment = Appointment(**prescription_data)
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)

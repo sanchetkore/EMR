@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic
+from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic, pharmacy, dashboard
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -36,6 +36,8 @@ app.include_router(visits.router, prefix="/api/visits", tags=["visits"])
 app.include_router(drugs.router, prefix="/api/drugs", tags=["drugs"])
 app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
 app.include_router(clinic.router, prefix="/api/clinic", tags=["clinic"])
+app.include_router(pharmacy.router, prefix="/api/pharmacy", tags=["pharmacy"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
