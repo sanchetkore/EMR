@@ -40,10 +40,10 @@ class AppointmentStatusConfig(Base):
 class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    doctor_id = Column(Integer, ForeignKey("users.id")) # user with doctor role
-    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
-    appointment_time = Column(DateTime, default=datetime.utcnow)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    doctor_id = Column(Integer, ForeignKey("users.id"), index=True) # user with doctor role
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True, index=True)
+    appointment_time = Column(DateTime, default=datetime.utcnow, index=True)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     token_number = Column(String, nullable=True)
     
@@ -56,7 +56,7 @@ class Appointment(Base):
 class PatientAISummary(Base):
     __tablename__ = "patient_ai_summaries"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     summary_text = Column(Text, nullable=False)
     last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

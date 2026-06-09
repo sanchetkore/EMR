@@ -17,8 +17,7 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     invoice_data = invoice.dict(exclude={"items"})
     db_invoice = Invoice(**invoice_data)
     db.add(db_invoice)
-    db.commit()
-    db.refresh(db_invoice)
+    db.flush()
     
     for item in invoice.items:
         db_item = InvoiceItem(**item.dict(), invoice_id=db_invoice.id)

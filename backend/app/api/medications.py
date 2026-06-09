@@ -35,7 +35,7 @@ def update_medication(medication_id: int, medication_update: MedicationCreate, d
     if not db_medication:
         raise HTTPException(status_code=404, detail="Medication not found")
     
-    for var, value in vars(medication_update).items():
+    for var, value in medication_update.model_dump(exclude_unset=True).items():
         setattr(db_medication, var, value)
         
     db.commit()

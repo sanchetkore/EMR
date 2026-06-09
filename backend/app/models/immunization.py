@@ -6,12 +6,12 @@ from app.core.database import Base
 class Immunization(Base):
     __tablename__ = "immunizations"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     vaccine_name = Column(String)
     administered_date = Column(Date)
     lot_number = Column(String, nullable=True)
     site = Column(String, nullable=True)
-    administered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    administered_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     

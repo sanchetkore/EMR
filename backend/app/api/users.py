@@ -79,7 +79,8 @@ async def upload_signature(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    file_path = os.path.join(SECURE_UPLOAD_DIR, f"user_signature_{user_id}_{file.filename}")
+    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    file_path = os.path.join(SECURE_UPLOAD_DIR, f"user_signature_{user_id}_{safe_filename}")
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)

@@ -6,9 +6,9 @@ from app.core.database import Base
 class Encounter(Base):
     __tablename__ = "encounters"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    doctor_id = Column(Integer, ForeignKey("users.id"))
-    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    doctor_id = Column(Integer, ForeignKey("users.id"), index=True)
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True, index=True)
     encounter_date = Column(DateTime, default=datetime.utcnow)
     visit_number = Column(Integer, nullable=True)
     reason = Column(String, nullable=True)
@@ -41,8 +41,8 @@ class VitalConfiguration(Base):
 class PatientVital(Base):
     __tablename__ = "patient_vitals"
     id = Column(Integer, primary_key=True, index=True)
-    encounter_id = Column(Integer, ForeignKey("encounters.id"))
-    vital_config_id = Column(Integer, ForeignKey("vital_configurations.id"))
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), index=True)
+    vital_config_id = Column(Integer, ForeignKey("vital_configurations.id"), index=True)
     value = Column(String, nullable=True)
     
     encounter = relationship("Encounter", back_populates="vitals")
@@ -51,7 +51,7 @@ class PatientVital(Base):
 class VisitComplaint(Base):
     __tablename__ = "visit_complaints"
     id = Column(Integer, primary_key=True, index=True)
-    encounter_id = Column(Integer, ForeignKey("encounters.id"))
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), index=True)
     complaint = Column(String)
     from_date = Column(String, nullable=True)
     duration = Column(String, nullable=True)
@@ -61,7 +61,7 @@ class VisitComplaint(Base):
 class VisitDiagnosis(Base):
     __tablename__ = "visit_diagnoses"
     id = Column(Integer, primary_key=True, index=True)
-    encounter_id = Column(Integer, ForeignKey("encounters.id"))
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), index=True)
     diagnosis = Column(String)
     date = Column(String, nullable=True)
     
@@ -70,7 +70,7 @@ class VisitDiagnosis(Base):
 class VisitTreatment(Base):
     __tablename__ = "visit_treatments"
     id = Column(Integer, primary_key=True, index=True)
-    encounter_id = Column(Integer, ForeignKey("encounters.id"))
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), index=True)
     treatment = Column(String)
     due_date = Column(String, nullable=True)
     

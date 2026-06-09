@@ -23,7 +23,7 @@ class RolePermission(Base):
 class UserTab(Base):
     __tablename__ = "user_tabs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
     tab_name = Column(String, index=True)
     
     user = relationship("User", back_populates="tabs")

@@ -35,7 +35,7 @@ def update_medical_problem(problem_id: int, problem_update: MedicalProblemCreate
     if not db_problem:
         raise HTTPException(status_code=404, detail="Medical Problem not found")
     
-    for var, value in vars(problem_update).items():
+    for var, value in problem_update.model_dump(exclude_unset=True).items():
         setattr(db_problem, var, value)
         
     db.commit()

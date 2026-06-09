@@ -33,7 +33,7 @@ def update_facility(facility_id: int, facility_update: FacilityCreate, db: Sessi
     if not db_facility:
         raise HTTPException(status_code=404, detail="Facility not found")
     
-    for var, value in vars(facility_update).items():
+    for var, value in facility_update.model_dump(exclude_unset=True).items():
         setattr(db_facility, var, value)
         
     db.commit()

@@ -34,7 +34,7 @@ def update_vitals(vitals_id: int, vitals_update: VitalsCreate, db: Session = Dep
     if not db_vitals:
         raise HTTPException(status_code=404, detail="Vitals not found")
     
-    for var, value in vars(vitals_update).items():
+    for var, value in vitals_update.model_dump(exclude_unset=True).items():
         setattr(db_vitals, var, value)
         
     if db_vitals.weight and db_vitals.height:
@@ -84,7 +84,7 @@ def update_consultation(consultation_id: int, consultation_update: ConsultationC
     if not db_consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
     
-    for var, value in vars(consultation_update).items():
+    for var, value in consultation_update.model_dump(exclude_unset=True).items():
         setattr(db_consultation, var, value)
         
     db.commit()

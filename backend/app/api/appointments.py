@@ -135,7 +135,7 @@ def update_appointment(appointment_id: int, appointment_update: AppointmentCreat
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
-    for var, value in vars(appointment_update).items():
+    for var, value in appointment_update.model_dump(exclude_unset=True).items():
         setattr(db_appointment, var, value)
         
     db.commit()

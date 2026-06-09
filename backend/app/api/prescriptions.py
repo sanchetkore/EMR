@@ -24,8 +24,7 @@ def create_prescription(prescription: PrescriptionCreate, background_tasks: Back
     prescription_data = prescription.dict(exclude={"items"})
     db_prescription = Prescription(**prescription_data)
     db.add(db_prescription)
-    db.commit()
-    db.refresh(db_prescription)
+    db.flush()
     
     for item in prescription.items:
         db_item = PrescriptionItem(**item.dict(), prescription_id=db_prescription.id)

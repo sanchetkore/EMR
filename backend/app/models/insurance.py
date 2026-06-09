@@ -6,7 +6,7 @@ from app.core.database import Base
 class Insurance(Base):
     __tablename__ = "insurances"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     provider = Column(String)
     policy_number = Column(String)
     group_number = Column(String, nullable=True)

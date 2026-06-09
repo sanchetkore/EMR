@@ -6,7 +6,7 @@ from app.core.database import Base
 class Allergy(Base):
     __tablename__ = "allergies"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     allergen = Column(String)
     reaction = Column(String, nullable=True)
     severity = Column(String, default="Mild") # Mild, Moderate, Severe

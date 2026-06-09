@@ -47,6 +47,12 @@ def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inactive user",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
         
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

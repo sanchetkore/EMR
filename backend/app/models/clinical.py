@@ -10,7 +10,7 @@ class Vitals(Base):
     __tablename__ = "vitals"
     id = Column(Integer, primary_key=True, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), unique=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     bp = Column(String, nullable=True) # e.g. 120/80
     sugar = Column(Float, nullable=True)
     pulse = Column(Integer, nullable=True)
@@ -50,7 +50,7 @@ class Template(Base):
 class TemplateItem(Base):
     __tablename__ = "template_items"
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("templates.id"))
+    template_id = Column(Integer, ForeignKey("templates.id"), index=True)
     molecule = Column(String)
     morning = Column(String, nullable=True)
     afternoon = Column(String, nullable=True)
@@ -64,8 +64,8 @@ class TemplateItem(Base):
 class Invoice(Base):
     __tablename__ = "invoices"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    appointment_id = Column(Integer, ForeignKey("appointments.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), index=True)
     amount = Column(Float)
     status = Column(String, default="Pending") # Pending, Paid, Cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -77,7 +77,7 @@ class Invoice(Base):
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
     id = Column(Integer, primary_key=True, index=True)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"))
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), index=True)
     service_name = Column(String)
     quantity = Column(Integer, default=1)
     unit_price = Column(Float)

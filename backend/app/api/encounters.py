@@ -40,7 +40,7 @@ def update_encounter(encounter_id: int, encounter_update: EncounterCreate, db: S
     if not db_encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     
-    for var, value in vars(encounter_update).items():
+    for var, value in encounter_update.model_dump(exclude_unset=True).items():
         setattr(db_encounter, var, value)
         
     db.commit()

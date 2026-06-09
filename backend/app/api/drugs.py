@@ -36,7 +36,7 @@ def update_drug(drug_id: int, drug_update: DrugCreate, db: Session = Depends(get
     if not db_drug:
         raise HTTPException(status_code=404, detail="Drug not found")
         
-    for var, value in vars(drug_update).items():
+    for var, value in drug_update.model_dump(exclude_unset=True).items():
         setattr(db_drug, var, value)
         
     db.commit()

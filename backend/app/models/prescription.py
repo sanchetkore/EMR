@@ -6,10 +6,10 @@ from app.core.database import Base
 class Prescription(Base):
     __tablename__ = "prescriptions"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    encounter_id = Column(Integer, ForeignKey("encounters.id"), nullable=True)
-    doctor_id = Column(Integer, ForeignKey("users.id"))
-    date_prescribed = Column(DateTime, default=datetime.utcnow)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), nullable=True, index=True)
+    doctor_id = Column(Integer, ForeignKey("users.id"), index=True)
+    date_prescribed = Column(DateTime, default=datetime.utcnow, index=True)
     notes = Column(Text, nullable=True)
     status = Column(String, default="Pending") # Pending, Processing, Fulfilled, Cancelled
     
@@ -21,7 +21,7 @@ class Prescription(Base):
 class PrescriptionItem(Base):
     __tablename__ = "prescription_items"
     id = Column(Integer, primary_key=True, index=True)
-    prescription_id = Column(Integer, ForeignKey("prescriptions.id"))
+    prescription_id = Column(Integer, ForeignKey("prescriptions.id"), index=True)
     molecule = Column(String)
     morning = Column(String, nullable=True)
     afternoon = Column(String, nullable=True)

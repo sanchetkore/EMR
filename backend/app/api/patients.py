@@ -32,14 +32,14 @@ def get_patients(search: str = None, db: Session = Depends(get_db)):
 def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     db_patient = Patient(**patient.dict())
     db.add(db_patient)
-    db.commit()
-    db.refresh(db_patient)
+    db.flush()
     
     # Create initial "First Time" summary
     from app.models.patient import PatientAISummary
     db_summary = PatientAISummary(patient_id=db_patient.id, summary_text="First Time")
     db.add(db_summary)
     db.commit()
+    db.refresh(db_patient)
     
     return db_patient
 
@@ -56,7 +56,7 @@ def update_patient(patient_id: int, patient_update: PatientCreate, db: Session =
     if not db_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    for var, value in vars(patient_update).items():
+    for var, value in patient_update.model_dump(exclude_unset=True).items():
         setattr(db_patient, var, value)
         
     db.commit()

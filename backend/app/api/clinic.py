@@ -29,7 +29,7 @@ def update_clinic_profile(profile_update: ClinicProfileUpdate, db: Session = Dep
         profile = ClinicProfile(id=1, **profile_update.dict())
         db.add(profile)
     else:
-        for var, value in vars(profile_update).items():
+        for var, value in profile_update.model_dump(exclude_unset=True).items():
             if value is not None:
                 setattr(profile, var, value)
                 
@@ -42,7 +42,8 @@ async def upload_clinic_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    file_path = os.path.join(UPLOAD_DIR, f"clinic_logo_{file.filename}")
+    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    file_path = os.path.join(UPLOAD_DIR, f"clinic_logo_{safe_filename}")
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)

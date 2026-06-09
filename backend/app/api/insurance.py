@@ -28,7 +28,7 @@ def update_insurance(insurance_id: int, insurance_update: InsuranceCreate, db: S
     if not db_insurance:
         raise HTTPException(status_code=404, detail="Insurance not found")
     
-    for var, value in vars(insurance_update).items():
+    for var, value in insurance_update.model_dump(exclude_unset=True).items():
         setattr(db_insurance, var, value)
         
     db.commit()

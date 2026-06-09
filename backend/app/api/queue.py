@@ -54,9 +54,11 @@ def get_live_queue(db: Session):
         elif apt.status in ["Scheduled", "Waiting"]:
             waiting.append(payload)
             
-    # Fetch prescriptions for the queue, chronologically
+    # Fetch prescriptions for the queue, chronologically, only for today
     prescriptions = db.query(Prescription).filter(
-        Prescription.status != "Cancelled"
+        Prescription.status != "Cancelled",
+        Prescription.date_prescribed >= today_start,
+        Prescription.date_prescribed <= today_end
     ).order_by(Prescription.date_prescribed.asc()).all()
     
     pharmacy_waiting = []

@@ -115,7 +115,7 @@ def update_combo_catalog_item(combo_id: int, combo_update: ComboLabTestCreate, d
     if not db_item:
         raise HTTPException(status_code=404, detail="Combo not found")
         
-    for var, value in vars(combo_update).items():
+    for var, value in combo_update.model_dump(exclude_unset=True).items():
         setattr(db_item, var, value)
         
     db.commit()
@@ -184,7 +184,7 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab Result not found")
     
-    for var, value in vars(lab_update).items():
+    for var, value in lab_update.model_dump(exclude_unset=True).items():
         setattr(db_lab, var, value)
         
     if lab_update.status == "Completed" and not db_lab.result_date:

@@ -31,7 +31,8 @@ async def upload_document(
     current_user: User = Depends(get_current_user)
 ):
     # Save file
-    file_path = os.path.join(UPLOAD_DIR, f"{patient_id}_{file.filename}")
+    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    file_path = os.path.join(UPLOAD_DIR, f"{patient_id}_{safe_filename}")
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)

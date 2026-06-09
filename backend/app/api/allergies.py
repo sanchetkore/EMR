@@ -35,7 +35,7 @@ def update_allergy(allergy_id: int, allergy_update: AllergyCreate, db: Session =
     if not db_allergy:
         raise HTTPException(status_code=404, detail="Allergy not found")
     
-    for var, value in vars(allergy_update).items():
+    for var, value in allergy_update.model_dump(exclude_unset=True).items():
         setattr(db_allergy, var, value)
         
     db.commit()
