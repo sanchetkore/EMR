@@ -54,7 +54,8 @@ def seed_db():
             "manage_templates": [admin_role, doctor_role],
             "view_templates": [admin_role, doctor_role, frontdesk_role],
             "manage_pharmacy": [pharmacist_role],
-            "view_pharmacy": [pharmacist_role, doctor_role]
+            "view_pharmacy": [pharmacist_role, doctor_role],
+            "view_dashboard": [admin_role, doctor_role, frontdesk_role]
         }
         
         for perm_name, roles in perms.items():

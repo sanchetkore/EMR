@@ -70,3 +70,16 @@ class Appointment(AppointmentBase):
     appointment_type: Optional[AppointmentTypeConfig] = None
     class Config:
         orm_mode = True
+
+class PatientAISummaryBase(BaseModel):
+    summary_text: str
+
+class PatientAISummaryCreate(PatientAISummaryBase):
+    patient_id: int
+
+class PatientAISummarySchema(PatientAISummaryBase):
+    id: int
+    patient_id: int
+    last_updated_at: datetime
+    class Config:
+        orm_mode = True

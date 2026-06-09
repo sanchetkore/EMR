@@ -4,7 +4,7 @@ from app.core.websocket import manager
 from app.api.queue import get_live_queue
 from typing import List
 from app.core.database import get_db
-from app.models.patient import Appointment, AppointmentStatusConfig, AppointmentTypeConfig
+from app.models.patient import Appointment, AppointmentStatusConfig, AppointmentTypeConfig, Patient
 from app.schemas.patient import Appointment as AppointmentSchema, AppointmentCreate, AppointmentStatusConfig as AppointmentStatusSchema, AppointmentStatusConfigCreate, AppointmentTypeConfig as AppointmentTypeSchema, AppointmentTypeConfigCreate
 from app.api.deps import RequirePermission
 
@@ -12,7 +12,7 @@ router = APIRouter()
 
 from typing import List, Optional
 from datetime import date, datetime, timedelta, timezone
-from sqlalchemy import cast, Date
+from sqlalchemy import cast, Date, or_
 
 @router.get("/types", response_model=List[AppointmentTypeSchema], dependencies=[Depends(RequirePermission("view_appointments"))])
 def get_appointment_types(db: Session = Depends(get_db)):
@@ -44,6 +44,9 @@ def get_appointments(
     doctor_id: Optional[int] = None,
     appointment_date: Optional[date] = None,
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     query = db.query(Appointment)
@@ -55,7 +58,19 @@ def get_appointments(
         query = query.filter(cast(Appointment.appointment_time, Date) == appointment_date)
     if status:
         query = query.filter(Appointment.status == status)
-    return query.all()
+        
+    if search:
+        query = query.join(Patient).filter(
+            or_(
+                Patient.first_name.ilike(f"%{search}%"),
+                Patient.last_name.ilike(f"%{search}%"),
+                Patient.contact_number.ilike(f"%{search}%"),
+                Appointment.status.ilike(f"%{search}%")
+            )
+        )
+        
+    query = query.order_by(Appointment.appointment_time.asc())
+    return query.offset(skip).limit(limit).all()
 
 @router.post("/", response_model=AppointmentSchema, dependencies=[Depends(RequirePermission("manage_appointments"))])
 def create_appointment(appointment: AppointmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

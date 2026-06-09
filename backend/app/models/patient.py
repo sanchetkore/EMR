@@ -21,6 +21,7 @@ class Patient(Base):
     is_active = Column(Integer, default=1) # 1 active, 0 inactive
     
     appointments = relationship("Appointment", back_populates="patient")
+    ai_summaries = relationship("PatientAISummary", back_populates="patient")
 
 class AppointmentTypeConfig(Base):
     __tablename__ = "appointment_types"
@@ -51,3 +52,12 @@ class Appointment(Base):
     appointment_type = relationship("AppointmentTypeConfig")
     consultation = relationship("Consultation", back_populates="appointment", uselist=False)
     vitals = relationship("Vitals", back_populates="appointment", uselist=False)
+
+class PatientAISummary(Base):
+    __tablename__ = "patient_ai_summaries"
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    summary_text = Column(Text, nullable=False)
+    last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    patient = relationship("Patient", back_populates="ai_summaries")

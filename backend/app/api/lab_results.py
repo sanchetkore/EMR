@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, Date, or_
 from typing import List, Optional
@@ -179,7 +179,7 @@ def get_lab_result(lab_id: int, db: Session = Depends(get_db)):
     return db_lab
 
 @router.put("/lab_results/{lab_id}", response_model=LabResultSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
-def update_lab_result(lab_id: int, lab_update: LabResultCreate, db: Session = Depends(get_db)):
+def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     db_lab = db.query(LabResult).filter(LabResult.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab Result not found")
@@ -218,6 +218,15 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, db: Session = De
     db.commit()
     db.commit()
     db.refresh(db_lab)
+    
+    if lab_update.status == "Completed":
+        from app.services.ai_summary_service import schedule_lab_ai_summary
+        
+        background_tasks.add_task(
+            schedule_lab_ai_summary,
+            patient_id=db_lab.patient_id
+        )
+        
     return db_lab
 
 @router.delete("/lab_results/{lab_id}", dependencies=[Depends(RequirePermission("manage_clinical"))])
