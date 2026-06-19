@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 import os
+import uuid
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
@@ -37,7 +38,7 @@ def create_role(role: RoleCreate, db: Session = Depends(get_db)):
     db.refresh(db_role)
     return db_role
 
-@router.get("/", response_model=List[UserSchema], dependencies=[Depends(RequirePermission("manage_users"))])
+@router.get("/", response_model=List[UserSchema], dependencies=[Depends(get_current_user)])
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
 
@@ -79,10 +80,21 @@ async def upload_signature(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    ext = os.path.splitext(file.filename)[1].lower()
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".pdf"}
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid file extension. Allowed: .jpg, .jpeg, .png, .pdf")
+
+    if file.content_type not in {"image/jpeg", "image/png", "application/pdf"}:
+        raise HTTPException(status_code=400, detail="Invalid MIME type")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB")
+
+    safe_filename = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(SECURE_UPLOAD_DIR, f"user_signature_{user_id}_{safe_filename}")
     with open(file_path, "wb") as f:
-        content = await file.read()
         f.write(content)
         
     if db_user.signature_path and os.path.exists(db_user.signature_path) and db_user.signature_path != file_path:

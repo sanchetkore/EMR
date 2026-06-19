@@ -49,3 +49,18 @@ class RequirePermission:
         if not has_permission:
             raise HTTPException(status_code=403, detail="Not enough permissions")
         return current_user
+
+async def get_current_user_ws(token: str):
+    from app.core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        user = db.query(User).filter(User.username == username).first()
+        return user
+    except JWTError:
+        return None
+    finally:
+        db.close()

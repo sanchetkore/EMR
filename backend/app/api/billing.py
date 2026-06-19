@@ -17,7 +17,8 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     invoice_data = invoice.dict(exclude={"items"})
     db_invoice = Invoice(**invoice_data)
     db.add(db_invoice)
-    db.flush()
+    db.commit()
+    db.refresh(db_invoice)
     
     for item in invoice.items:
         db_item = InvoiceItem(**item.dict(), invoice_id=db_invoice.id)
@@ -121,16 +122,32 @@ def suggest_bill(appointment_id: int, db: Session = Depends(get_db)):
     if appointment.consultation:
         encounter_id = appointment.consultation.encounter_id
         labs = db.query(LabResult).filter(LabResult.encounter_id == encounter_id).all()
+        
+        processed_combos = set()
+        
         for lab in labs:
-            if lab.catalog and lab.catalog.price > 0:
-                price = lab.catalog.price
-                items.append(BillSuggestionItem(
-                    service_name=f"Lab Test: {lab.test_name}",
-                    quantity=1,
-                    unit_price=price,
-                    total_price=price
-                ))
-                total += price
+            if lab.combo_id:
+                if lab.combo_id not in processed_combos:
+                    if lab.combo and lab.combo.price > 0:
+                        price = lab.combo.price
+                        items.append(BillSuggestionItem(
+                            service_name=f"Lab Package: {lab.combo.name}",
+                            quantity=1,
+                            unit_price=price,
+                            total_price=price
+                        ))
+                        total += price
+                    processed_combos.add(lab.combo_id)
+            else:
+                if lab.catalog and lab.catalog.price > 0:
+                    price = lab.catalog.price
+                    items.append(BillSuggestionItem(
+                        service_name=f"Lab Test: {lab.test_name}",
+                        quantity=1,
+                        unit_price=price,
+                        total_price=price
+                    ))
+                    total += price
                 
     return BillSuggestion(
         appointment_id=appointment.id,

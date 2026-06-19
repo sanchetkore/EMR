@@ -17,17 +17,18 @@ class LabCatalog(Base):
 class LabResult(Base):
     __tablename__ = "lab_results"
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
-    encounter_id = Column(Integer, ForeignKey("encounters.id"), nullable=True, index=True)
-    catalog_id = Column(Integer, ForeignKey("lab_catalog.id"), nullable=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    encounter_id = Column(Integer, ForeignKey("encounters.id"), nullable=True)
+    catalog_id = Column(Integer, ForeignKey("lab_catalog.id"), nullable=True)
+    combo_id = Column(Integer, ForeignKey("combo_lab_tests.id"), nullable=True)
     test_name = Column(String)
     cost = Column(Float, nullable=True)
     result_value = Column(String, nullable=True)
     unit = Column(String, nullable=True)
     reference_range = Column(String, nullable=True)
     status = Column(String, default="Pending") # Pending, Completed
-    ordered_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    ordered_date = Column(DateTime, default=datetime.utcnow, index=True)
+    ordered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    ordered_date = Column(DateTime, default=datetime.utcnow)
     result_date = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
     
@@ -35,6 +36,7 @@ class LabResult(Base):
     encounter = relationship("Encounter")
     orderer = relationship("User")
     catalog = relationship("LabCatalog")
+    combo = relationship("ComboLabTest")
 
 class ComboLabTest(Base):
     __tablename__ = "combo_lab_tests"

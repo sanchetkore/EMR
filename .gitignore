@@ -24,3 +24,9 @@ dist/
 .Trashes
 ehthumbs.db
 Thumbs.db
+emr-backend.tar
+emr-ui.tar
+emr-queue.tar
+uploads/
+secure_uploads/
+EMR-UI - Copy/

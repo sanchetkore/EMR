@@ -73,7 +73,7 @@ def delete_patient(patient_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"detail": "Patient deleted successfully"}
 
-@router.get("/{patient_id}/prescriptions", response_model=List[PrescriptionSchema])
+@router.get("/{patient_id}/prescriptions", response_model=List[PrescriptionSchema], dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_patient_prescriptions(patient_id: int, db: Session = Depends(get_db)):
     db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not db_patient:

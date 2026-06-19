@@ -115,7 +115,7 @@ def update_combo_catalog_item(combo_id: int, combo_update: ComboLabTestCreate, d
     if not db_item:
         raise HTTPException(status_code=404, detail="Combo not found")
         
-    for var, value in combo_update.model_dump(exclude_unset=True).items():
+    for var, value in vars(combo_update).items():
         setattr(db_item, var, value)
         
     db.commit()
@@ -149,6 +149,7 @@ def order_combo(payload: OrderComboPayload, db: Session = Depends(get_db)):
             patient_id=payload.patient_id,
             encounter_id=payload.encounter_id,
             catalog_id=catalog_item.id,
+            combo_id=combo.id,
             test_name=catalog_item.name,
             status="Pending",
             ordered_by=payload.ordered_by,
@@ -184,7 +185,7 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab Result not found")
     
-    for var, value in lab_update.model_dump(exclude_unset=True).items():
+    for var, value in vars(lab_update).items():
         setattr(db_lab, var, value)
         
     if lab_update.status == "Completed" and not db_lab.result_date:

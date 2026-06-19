@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta, date
 from app.core.database import get_db
@@ -48,6 +49,51 @@ def get_visit_history(patient_id: int, limit: int = 6, db: Session = Depends(get
     encounters = db.query(Encounter).filter(Encounter.patient_id == patient_id).order_by(Encounter.encounter_date.desc()).limit(limit).all()
     
     return [_build_visit_response(enc) for enc in encounters]
+
+@router.get("/suggestions/diagnoses", dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_diagnosis_suggestions(q: str = "", db: Session = Depends(get_db)):
+    """Return distinct diagnoses from past visits, ordered by frequency."""
+    if not q or len(q) < 2:
+        # Return top 15 most common diagnoses
+        results = db.query(
+            func.max(VisitDiagnosis.diagnosis),
+            func.count(VisitDiagnosis.diagnosis).label('count')
+        ).group_by(func.lower(VisitDiagnosis.diagnosis)).order_by(
+            func.count(VisitDiagnosis.diagnosis).desc()
+        ).limit(15).all()
+    else:
+        results = db.query(
+            func.max(VisitDiagnosis.diagnosis),
+            func.count(VisitDiagnosis.diagnosis).label('count')
+        ).filter(
+            func.lower(VisitDiagnosis.diagnosis).like(f"%{q.lower()}%")
+        ).group_by(func.lower(VisitDiagnosis.diagnosis)).order_by(
+            func.count(VisitDiagnosis.diagnosis).desc()
+        ).limit(15).all()
+
+    return [{"text": r[0], "count": r[1]} for r in results]
+
+@router.get("/suggestions/treatments", dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_treatment_suggestions(q: str = "", db: Session = Depends(get_db)):
+    """Return distinct treatments from past visits, ordered by frequency."""
+    if not q or len(q) < 2:
+        results = db.query(
+            func.max(VisitTreatment.treatment),
+            func.count(VisitTreatment.treatment).label('count')
+        ).group_by(func.lower(VisitTreatment.treatment)).order_by(
+            func.count(VisitTreatment.treatment).desc()
+        ).limit(15).all()
+    else:
+        results = db.query(
+            func.max(VisitTreatment.treatment),
+            func.count(VisitTreatment.treatment).label('count')
+        ).filter(
+            func.lower(VisitTreatment.treatment).like(f"%{q.lower()}%")
+        ).group_by(func.lower(VisitTreatment.treatment)).order_by(
+            func.count(VisitTreatment.treatment).desc()
+        ).limit(15).all()
+
+    return [{"text": r[0], "count": r[1]} for r in results]
 
 @router.get("/{encounter_id}", response_model=VisitResponse, dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_visit_by_id(encounter_id: int, db: Session = Depends(get_db)):

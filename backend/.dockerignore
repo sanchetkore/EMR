@@ -1,0 +1,7 @@
+__pycache__
+venv
+.env
+emr.db
+uploads/
+secure_uploads/
+alembic/

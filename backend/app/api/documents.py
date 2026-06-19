@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
+import uuid
 from app.core.database import get_db
 from app.models.document import Document
 from app.schemas.document import Document as DocumentSchema
@@ -31,10 +32,21 @@ async def upload_document(
     current_user: User = Depends(get_current_user)
 ):
     # Save file
-    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    ext = os.path.splitext(file.filename)[1].lower()
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".pdf"}
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid file extension. Allowed: .jpg, .jpeg, .png, .pdf")
+
+    if file.content_type not in {"image/jpeg", "image/png", "application/pdf"}:
+        raise HTTPException(status_code=400, detail="Invalid MIME type")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB")
+
+    safe_filename = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(UPLOAD_DIR, f"{patient_id}_{safe_filename}")
     with open(file_path, "wb") as f:
-        content = await file.read()
         f.write(content)
         
     db_doc = Document(

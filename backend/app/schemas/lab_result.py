@@ -26,6 +26,7 @@ class LabResultBase(BaseModel):
     patient_id: int
     encounter_id: Optional[int] = None
     catalog_id: Optional[int] = None
+    combo_id: Optional[int] = None
     test_name: str
     cost: Optional[float] = None
     result_value: Optional[str] = None

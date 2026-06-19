@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Request
+from app.core.limiter import limiter
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from datetime import datetime, timedelta, timezone
@@ -96,7 +97,8 @@ def get_live_queue(db: Session):
     }
 
 @router.get("/live")
-def get_live_queue_rest(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def get_live_queue_rest(request: Request, db: Session = Depends(get_db)):
     """REST endpoint for the TV display to fetch the initial queue state on page load"""
     return get_live_queue(db)
 

@@ -17,12 +17,21 @@ def get_inbox(db: Session = Depends(get_db), current_user: User = Depends(get_cu
 def get_sent(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return db.query(Message).filter(Message.sender_id == current_user.id).order_by(Message.created_at.desc()).all()
 
+from app.core.websockets import manager
+import json
+from fastapi.encoders import jsonable_encoder
+
 @router.post("/", response_model=MessageSchema)
-def create_message(message: MessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_message(message: MessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_message = Message(**message.dict(), sender_id=current_user.id)
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
+    
+    # Broadcast to receiver
+    msg_data = jsonable_encoder(db_message)
+    await manager.send_personal_message({"type": "NEW_MESSAGE", "message": msg_data}, db_message.receiver_id)
+    
     return db_message
 
 @router.put("/{message_id}/read", response_model=MessageSchema)

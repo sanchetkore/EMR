@@ -92,6 +92,17 @@ def create_appointment(appointment: AppointmentCreate, background_tasks: Backgro
     start_of_day = datetime.combine(apt_date, datetime.min.time())
     end_of_day = datetime.combine(apt_date, datetime.max.time())
     
+    # Check if patient already has an appointment today
+    existing_apt = db.query(Appointment).filter(
+        Appointment.patient_id == appointment.patient_id,
+        Appointment.appointment_time >= start_of_day,
+        Appointment.appointment_time <= end_of_day,
+        Appointment.status != "Cancelled"
+    ).first()
+    
+    if existing_apt:
+        raise HTTPException(status_code=400, detail="This patient already has an active appointment scheduled on this date.")
+        
     # Find the max token number for that day
     latest_apt = db.query(Appointment).filter(
         Appointment.appointment_time >= start_of_day,
@@ -135,7 +146,7 @@ def update_appointment(appointment_id: int, appointment_update: AppointmentCreat
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
-    for var, value in appointment_update.model_dump(exclude_unset=True).items():
+    for var, value in vars(appointment_update).items():
         setattr(db_appointment, var, value)
         
     db.commit()
