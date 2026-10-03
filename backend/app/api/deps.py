@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.database import get_db
 from app.core.security import SECRET_KEY, ALGORITHM
 from app.models.user import User, Role, Permission
@@ -23,7 +23,15 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = db.query(User).filter(User.username == token_data.username).first()
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.role).selectinload(Role.permissions),
+            selectinload(User.tabs)
+        )
+        .filter(User.username == token_data.username)
+        .first()
+    )
     if user is None:
         raise credentials_exception
     return user
@@ -41,10 +49,10 @@ class RequirePermission:
         # Admin bypass
         if current_user.role and current_user.role.name == "Admin":
             return current_user
-        
+
         if not current_user.role:
             raise HTTPException(status_code=403, detail="Not enough permissions")
-            
+
         has_permission = any(perm.name == self.required_permission for perm in current_user.role.permissions)
         if not has_permission:
             raise HTTPException(status_code=403, detail="Not enough permissions")

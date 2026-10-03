@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Float, ForeignKey, DateTime, Enum, Boolean
+from sqlalchemy import Column, Integer, String, Text, Float, ForeignKey, Date, DateTime, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -17,7 +17,7 @@ class Vitals(Base):
     weight = Column(Float, nullable=True) # in kg
     height = Column(Float, nullable=True) # in cm
     bmi = Column(Float, nullable=True)
-    
+
     appointment = relationship("Appointment", back_populates="vitals")
     patient = relationship("Patient")
 
@@ -30,7 +30,7 @@ class Consultation(Base):
     analysis = Column(Text, nullable=True)
     prescription = Column(Text, nullable=True)
     advice = Column(Text, nullable=True)
-    
+
     appointment = relationship("Appointment", back_populates="consultation")
 
 class TemplateType(str, enum.Enum):
@@ -44,7 +44,7 @@ class Template(Base):
     name = Column(String, index=True)
     type = Column(String) # TemplateType
     content = Column(Text, nullable=True)
-    
+
     items = relationship("TemplateItem", back_populates="template", cascade="all, delete-orphan")
 
 class TemplateItem(Base):
@@ -68,10 +68,13 @@ class Invoice(Base):
     appointment_id = Column(Integer, ForeignKey("appointments.id"), index=True)
     amount = Column(Float)
     status = Column(String, default="Pending") # Pending, Paid, Cancelled
+    payment_mode = Column(String, nullable=False, server_default="Cash")
+    transaction_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     patient = relationship("Patient")
     appointment = relationship("Appointment")
+    service_date = Column(Date, nullable=True, index=True)
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
 
 class InvoiceItem(Base):
@@ -81,5 +84,5 @@ class InvoiceItem(Base):
     service_name = Column(String)
     quantity = Column(Integer, default=1)
     unit_price = Column(Float)
-    
+
     invoice = relationship("Invoice", back_populates="items")

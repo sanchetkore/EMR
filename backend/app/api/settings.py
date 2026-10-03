@@ -8,6 +8,27 @@ from app.api.deps import RequirePermission, get_current_user
 
 router = APIRouter()
 
+from app.services.clinic_closures import ClinicClosures, get_closures, SETTING_KEY
+
+@router.get('/closures', response_model=ClinicClosures)
+def read_closures(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return get_closures(db)
+
+@router.put('/closures', response_model=ClinicClosures, dependencies=[Depends(RequirePermission('manage_settings'))])
+def save_closures(closures: ClinicClosures, db: Session = Depends(get_db)):
+    dates = [holiday.date for holiday in closures.holidays]
+    if len(dates) != len(set(dates)):
+        raise HTTPException(422, 'A holiday already exists for this date.')
+    closures.weekly_days_off = sorted(set(closures.weekly_days_off))
+    closures.holidays.sort(key=lambda holiday: holiday.date)
+    row = db.query(SystemSetting).filter(SystemSetting.key == SETTING_KEY).first()
+    if row:
+        row.value = closures.model_dump_json()
+    else:
+        db.add(SystemSetting(key=SETTING_KEY, value=closures.model_dump_json()))
+    db.commit()
+    return closures
+
 @router.get("/", response_model=List[SystemSettingSchema])
 def get_settings(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return db.query(SystemSetting).all()

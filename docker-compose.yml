@@ -21,12 +21,23 @@ services:
     depends_on:
       - redis
     volumes:
-      # Persist user uploads, but do NOT map the entire /app directory 
+      # Persist user uploads, but do NOT map the entire /app directory
       # otherwise the client machine will overwrite your container's code.
       - ./uploads:/app/uploads
       - ./secure_uploads:/app/secure_uploads
+      - ./public_assets:/app/public_assets
+
+  lis-order-worker:
+    image: emr:latest
+    restart: always
+    command: python -m scripts.run_lis_order_intents
+    env_file:
+      - .env
+    depends_on:
+      - backend
 
   ui:
+    build: ./EMR-UI
     image: emr-ui:latest
     container_name: emr_ui
     restart: always
@@ -36,6 +47,7 @@ services:
       - backend
 
   queue:
+    build: ./EMR-Queue
     image: emr-queue:latest
     container_name: emr_queue
     restart: always

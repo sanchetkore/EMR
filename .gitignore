@@ -30,3 +30,9 @@ emr-queue.tar
 uploads/
 secure_uploads/
 EMR-UI - Copy/
+*.db
+*.db-*
+*.tar
+*.tar.gz
+public_assets/
+backend/public_assets/

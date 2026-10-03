@@ -21,11 +21,7 @@ def get_encounters(patient_id: Optional[int] = None, doctor_id: Optional[int] = 
 
 @router.post("/", response_model=EncounterSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def create_encounter(encounter: EncounterCreate, db: Session = Depends(get_db)):
-    db_encounter = Encounter(**encounter.dict())
-    db.add(db_encounter)
-    db.commit()
-    db.refresh(db_encounter)
-    return db_encounter
+    raise HTTPException(status_code=410, detail="Create consultations through /api/visits/ so clinical changes are saved together")
 
 @router.get("/{encounter_id}", response_model=EncounterSchema, dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_encounter(encounter_id: int, db: Session = Depends(get_db)):
@@ -36,13 +32,4 @@ def get_encounter(encounter_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{encounter_id}", response_model=EncounterSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def update_encounter(encounter_id: int, encounter_update: EncounterCreate, db: Session = Depends(get_db)):
-    db_encounter = db.query(Encounter).filter(Encounter.id == encounter_id).first()
-    if not db_encounter:
-        raise HTTPException(status_code=404, detail="Encounter not found")
-    
-    for var, value in encounter_update.model_dump(exclude_unset=True).items():
-        setattr(db_encounter, var, value)
-        
-    db.commit()
-    db.refresh(db_encounter)
-    return db_encounter
+    raise HTTPException(status_code=410, detail="Edit consultations through /api/visits/{id} with an expected version")

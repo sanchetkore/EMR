@@ -1,0 +1,57 @@
+services:
+
+  redis:
+    image: redis:7
+    container_name: emr_redis
+    restart: always
+    ports:
+      - "7400:6379"
+    volumes:
+      - redisdata:/data
+
+  backend:
+    image: emr:latest
+    container_name: emr_backend
+    restart: always
+    ports:
+      - "9000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      # Persist user uploads, but do NOT map the entire /app directory
+      # otherwise the client machine will overwrite your container's code.
+      - ./uploads:/app/uploads
+      - ./secure_uploads:/app/secure_uploads
+      - ./public_assets:/app/public_assets
+
+  lis-order-worker:
+    image: emr:latest
+    restart: always
+    command: python -m scripts.run_lis_order_intents
+    env_file:
+      - .env
+    depends_on:
+      - backend
+
+  ui:
+    image: emr-ui:latest
+    container_name: emr_ui
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  queue:
+    image: emr-queue:latest
+    container_name: emr_queue
+    restart: always
+    ports:
+      - "8080:80" # Exposing the Queue UI on port 8080
+    depends_on:
+      - backend
+
+volumes:
+  redisdata:

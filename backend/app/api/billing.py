@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.models.clinical import Invoice, InvoiceItem
 from app.models.patient import Appointment
@@ -8,9 +8,38 @@ from app.schemas.clinical import Invoice as InvoiceSchema, InvoiceCreate, BillSu
 from app.api.deps import RequirePermission
 from typing import Optional
 from datetime import date, datetime
-from sqlalchemy import cast, Date
+from sqlalchemy import or_, and_
 
 router = APIRouter()
+
+@router.get("/suggestions/daily", dependencies=[Depends(RequirePermission("view_billing"))])
+def get_daily_suggestions(service_date: date, db: Session = Depends(get_db)):
+    from app.services.daily_billing import daily_suggestions
+    return daily_suggestions(db, service_date)
+
+@router.post("/suggestions/daily", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
+def create_daily_suggestion_invoice(patient_id: int, service_date: date, db: Session = Depends(get_db)):
+    from app.models.patient import Patient
+    from app.services.daily_billing import daily_suggestions
+    # Serialize generation for the same patient and recalculate at save time.
+    patient = db.query(Patient).filter(Patient.id == patient_id).with_for_update().first()
+    if not patient:
+        raise HTTPException(404, "Patient not found")
+    suggestions = daily_suggestions(db, service_date, patient_id)
+    if not suggestions or not suggestions[0]['unbilled_items']:
+        raise HTTPException(409, "These services are already billed or there are no billable services.")
+    suggestion = suggestions[0]
+    if suggestion['needs_review']:
+        raise HTTPException(409, "Review existing invoices and missing service prices before creating a bill.")
+    # Store the service day separately from the actual invoice creation timestamp.
+    invoice = Invoice(patient_id=patient_id, amount=suggestion['total_amount'], status="Pending",
+                      service_date=service_date)
+    invoice.items = [InvoiceItem(service_name=r['service_name'], quantity=r['quantity'], unit_price=r['unit_price'])
+                     for r in suggestion['unbilled_items']]
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+    return invoice
 
 @router.post("/", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
 def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
@@ -19,29 +48,31 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     db.add(db_invoice)
     db.commit()
     db.refresh(db_invoice)
-    
+
     for item in invoice.items:
         db_item = InvoiceItem(**item.dict(), invoice_id=db_invoice.id)
         db.add(db_item)
-    
+
     db.commit()
     db.refresh(db_invoice)
     return db_invoice
 
 @router.get("/", response_model=list[InvoiceSchema], dependencies=[Depends(RequirePermission("view_billing"))])
 def get_invoices(
-    patient_id: Optional[int] = None, 
+    patient_id: Optional[int] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Invoice)
+    query = db.query(Invoice).options(selectinload(Invoice.items))
     if patient_id:
         query = query.filter(Invoice.patient_id == patient_id)
     if start_date:
-        query = query.filter(cast(Invoice.created_at, Date) >= start_date)
+        start_dt = datetime.combine(start_date.date(), datetime.min.time())
+        query = query.filter(Invoice.created_at >= start_dt)
     if end_date:
-        query = query.filter(cast(Invoice.created_at, Date) <= end_date)
+        end_dt = datetime.combine(end_date.date(), datetime.max.time())
+        query = query.filter(Invoice.created_at <= end_dt)
     return query.all()
 
 @router.get("/{invoice_id}", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("view_billing"))])
@@ -56,32 +87,45 @@ def update_invoice(invoice_id: int, invoice_update: InvoiceCreate, db: Session =
     db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not db_invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-        
+
     db_invoice.amount = invoice_update.amount
     if invoice_update.status:
         db_invoice.status = invoice_update.status
     if invoice_update.appointment_id is not None:
         db_invoice.appointment_id = invoice_update.appointment_id
-        
+
     # Rebuild items
     db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
     db.flush()
-    
+
     if invoice_update.items:
         for item in invoice_update.items:
             db_item = InvoiceItem(**item.dict(), invoice_id=db_invoice.id)
             db.add(db_item)
-            
+
     db.commit()
     db.refresh(db_invoice)
     return db_invoice
 
+from pydantic import BaseModel
+
+class InvoiceStatusUpdate(BaseModel):
+    status: str
+    payment_mode: Optional[str] = None
+    transaction_id: Optional[str] = None
+
 @router.put("/{invoice_id}/status", response_model=InvoiceSchema, dependencies=[Depends(RequirePermission("manage_billing"))])
-def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(get_db)):
+def update_invoice_status(invoice_id: int, update_data: InvoiceStatusUpdate, db: Session = Depends(get_db)):
     db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not db_invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    db_invoice.status = status
+
+    db_invoice.status = update_data.status
+    if update_data.payment_mode is not None:
+        db_invoice.payment_mode = update_data.payment_mode
+    if update_data.transaction_id is not None:
+        db_invoice.transaction_id = update_data.transaction_id
+
     db.commit()
     db.refresh(db_invoice)
     return db_invoice
@@ -91,7 +135,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not db_invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+
     db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
     db.delete(db_invoice)
     db.commit()
@@ -102,10 +146,10 @@ def suggest_bill(appointment_id: int, db: Session = Depends(get_db)):
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
-        
+
     items = []
     total = 0.0
-    
+
     # 1. Add Appointment Consultation Fee
     if appointment.appointment_type:
         rate = appointment.appointment_type.rate
@@ -116,15 +160,15 @@ def suggest_bill(appointment_id: int, db: Session = Depends(get_db)):
             total_price=rate
         ))
         total += rate
-        
+
     # 2. Find any Lab Tests ordered during this appointment's encounter
     # We find the encounter for this appointment first
     if appointment.consultation:
         encounter_id = appointment.consultation.encounter_id
         labs = db.query(LabResult).filter(LabResult.encounter_id == encounter_id).all()
-        
+
         processed_combos = set()
-        
+
         for lab in labs:
             if lab.combo_id:
                 if lab.combo_id not in processed_combos:
@@ -148,7 +192,7 @@ def suggest_bill(appointment_id: int, db: Session = Depends(get_db)):
                         total_price=price
                     ))
                     total += price
-                
+
     return BillSuggestion(
         appointment_id=appointment.id,
         patient_id=appointment.patient_id,

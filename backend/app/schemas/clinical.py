@@ -86,6 +86,8 @@ class InvoiceBase(BaseModel):
     appointment_id: Optional[int] = None
     amount: float
     status: Optional[str] = "Pending"
+    payment_mode: str = "Cash"
+    transaction_id: Optional[str] = None
 
 class InvoiceCreate(InvoiceBase):
     items: Optional[list[InvoiceItemCreate]] = []

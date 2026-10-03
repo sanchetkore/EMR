@@ -1,7 +1,60 @@
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
 from app.models import user, patient, clinical, lab_result
+from sqlalchemy import inspect, text
+from app.models.lis_connector import LISConnector, PatientExternalIdentity, ExternalLabOrder
 from app.core.security import get_password_hash
+from app.core.lis_migrations import migrate_patient_identity_uniqueness
+
+def run_emr_auto_migrations():
+    """Ensure missing columns and constraints on existing tables are added safely."""
+    from app.core.encounter_migrations import migrate_encounter_lifecycle
+    from app.core.patient_brain_migrations import migrate_patient_brain
+    try:
+        with engine.begin() as conn:
+            if conn.dialect.name == "sqlite" and not conn.connection.driver_connection.in_transaction:
+                conn.exec_driver_sql("BEGIN")
+            inspector = inspect(conn)
+            migrate_encounter_lifecycle(conn)
+            migrate_patient_brain(conn)
+            if inspector.has_table("invoices"):
+                invoice_cols = {col["name"] for col in inspector.get_columns("invoices")}
+                if "service_date" not in invoice_cols:
+                    conn.execute(text("ALTER TABLE invoices ADD COLUMN service_date DATE"))
+            if inspector.has_table("lis_connector"):
+                cols = {col["name"] for col in inspector.get_columns("lis_connector")}
+                if "configured_mode" not in cols:
+                    conn.execute(text("ALTER TABLE lis_connector ADD COLUMN configured_mode VARCHAR(32) DEFAULT 'CONNECTED'"))
+                if "last_health_status" not in cols:
+                    conn.execute(text("ALTER TABLE lis_connector ADD COLUMN last_health_status VARCHAR(32) DEFAULT 'UNKNOWN'"))
+                if "last_health_check" not in cols:
+                    conn.execute(text("ALTER TABLE lis_connector ADD COLUMN last_health_check TIMESTAMP"))
+                if "last_catalog_refresh" not in cols:
+                    conn.execute(text("ALTER TABLE lis_connector ADD COLUMN last_catalog_refresh TIMESTAMP"))
+
+            if inspector.has_table("patients"):
+                cols = {col["name"] for col in inspector.get_columns("patients")}
+                if "opd_number" not in cols:
+                    conn.execute(text("ALTER TABLE patients ADD COLUMN opd_number VARCHAR"))
+                # Clean up empty strings to NULL and ensure partial unique index
+                conn.execute(text("UPDATE patients SET opd_number = NULL WHERE opd_number IS NOT NULL AND trim(opd_number) = ''"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_patient_opd ON patients(opd_number) WHERE opd_number IS NOT NULL"))
+
+            if inspector.has_table("patient_external_identities"):
+                cols = {col["name"] for col in inspector.get_columns("patient_external_identities")}
+                if "lis_host" not in cols:
+                    conn.execute(text("ALTER TABLE patient_external_identities ADD COLUMN lis_host VARCHAR(128) DEFAULT ''"))
+                migrate_patient_identity_uniqueness(conn)
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_patient_lis_host ON patient_external_identities(patient_id, lis_host)"))
+
+            if inspector.has_table("external_lab_orders"):
+                cols = {col["name"] for col in inspector.get_columns("external_lab_orders")}
+                if "lis_host" not in cols:
+                    conn.execute(text("ALTER TABLE external_lab_orders ADD COLUMN lis_host VARCHAR(128) DEFAULT ''"))
+                if "payload_hash" not in cols:
+                    conn.execute(text("ALTER TABLE external_lab_orders ADD COLUMN payload_hash VARCHAR(64)"))
+    except Exception as e:
+        raise RuntimeError("EMR schema upgrade failed; startup stopped to avoid unsafe LIS mappings") from e
 
 def seed_db():
     # Create tables
@@ -9,9 +62,14 @@ def seed_db():
     patient.Base.metadata.create_all(bind=engine)
     clinical.Base.metadata.create_all(bind=engine)
     lab_result.Base.metadata.create_all(bind=engine)
-    
+    LISConnector.metadata.create_all(bind=engine)
+    PatientExternalIdentity.metadata.create_all(bind=engine)
+    ExternalLabOrder.metadata.create_all(bind=engine)
+
     from app.models.settings import SystemSetting
     SystemSetting.metadata.create_all(bind=engine)
+
+    run_emr_auto_migrations()
 
     db = SessionLocal()
     try:
@@ -34,7 +92,7 @@ def seed_db():
         if not pharmacist_role:
             pharmacist_role = user.Role(name="Pharmacist")
             roles_to_add.append(pharmacist_role)
-        
+
         if roles_to_add:
             db.add_all(roles_to_add)
             db.commit()
@@ -57,14 +115,14 @@ def seed_db():
             "view_pharmacy": [pharmacist_role, doctor_role],
             "view_dashboard": [admin_role, doctor_role, frontdesk_role]
         }
-        
+
         for perm_name, roles in perms.items():
             perm = db.query(user.Permission).filter(user.Permission.name == perm_name).first()
             if not perm:
                 perm = user.Permission(name=perm_name)
                 db.add(perm)
                 db.commit()
-            
+
             for role in roles:
                 if role and perm not in role.permissions:
                     role.permissions.append(perm)
@@ -81,7 +139,7 @@ def seed_db():
             )
             db.add(admin_user)
             db.commit()
-            
+
         doctor_user = db.query(user.User).filter(user.User.username == "doctor").first()
         if not doctor_user:
             doctor_user = user.User(
@@ -92,7 +150,7 @@ def seed_db():
             )
             db.add(doctor_user)
             db.commit()
-            
+
         frontdesk_user = db.query(user.User).filter(user.User.username == "frontdesk").first()
         if not frontdesk_user:
             frontdesk_user = user.User(
@@ -103,7 +161,7 @@ def seed_db():
             )
             db.add(frontdesk_user)
             db.commit()
-            
+
         pharmacist_user = db.query(user.User).filter(user.User.username == "pharmacist").first()
         if not pharmacist_user:
             pharmacist_user = user.User(
@@ -114,7 +172,7 @@ def seed_db():
             )
             db.add(pharmacist_user)
             db.commit()
-            
+
         # Create default system settings
         from app.models.settings import SystemSetting
         default_settings = {

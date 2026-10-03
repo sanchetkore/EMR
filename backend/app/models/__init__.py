@@ -2,7 +2,8 @@ from app.models.user import User, Role, Permission, RolePermission, UserTab
 from app.models.patient import Patient, Appointment, AppointmentTypeConfig, AppointmentStatusConfig, PatientAISummary
 from app.models.clinical import Vitals, Consultation, Template, TemplateItem, Invoice, InvoiceItem
 from app.models.settings import SystemSetting
-from app.models.encounter import Encounter, VitalConfiguration, PatientVital, VisitComplaint, VisitDiagnosis, VisitTreatment
+from app.models.encounter import Encounter, EncounterAmendment, VitalConfiguration, PatientVital, VisitComplaint, VisitDiagnosis, VisitTreatment
+from app.models.visit_lab_intent import VisitLabOrderIntent
 from app.models.allergy import Allergy
 from app.models.medical_problem import MedicalProblem
 from app.models.medication import Medication
@@ -15,3 +16,17 @@ from app.models.document import Document
 from app.models.message import Message
 from app.models.clinic import ClinicProfile
 from app.models.drug import Drug
+from app.models.whatsapp_template import WhatsappTemplate
+from app.models.lis_connector import LISConnector
+from app.models.patient_brain import (
+    PatientProblem,
+    ClinicalEvent,
+    ClinicalDecision,
+    OpenLoop,
+    MedicationEvent,
+    PatientFlag,
+    BrainSnapshot,
+    AIInteraction,
+    BrainCorrection,
+    ConversationState,
+)

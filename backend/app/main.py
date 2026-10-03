@@ -3,11 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.core.limiter import limiter
-from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic, pharmacy, dashboard, ws
+from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic, pharmacy, dashboard, ws, templates, media, lis_integration
 import os
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="EMR Backend")
+
+from app.api import ai_documentation, patient_brain
+app.include_router(ai_documentation.router, prefix="/api/ai", tags=["ai-documentation"])
+app.include_router(patient_brain.router, prefix="/api", tags=["patient-brain"])
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -39,6 +43,7 @@ app.include_router(appointments.router, prefix="/api/appointments", tags=["appoi
 app.include_router(clinical.router, prefix="/api/clinical", tags=["clinical"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(lis_integration.router, prefix="/api/integrations/lis", tags=["lis-integration"])
 app.include_router(encounters.router, prefix="/api/encounters", tags=["encounters"])
 app.include_router(allergies.router, prefix="/api", tags=["allergies"])
 app.include_router(medical_problems.router, prefix="/api", tags=["medical_problems"])
@@ -57,10 +62,13 @@ app.include_router(clinic.router, prefix="/api/clinic", tags=["clinic"])
 app.include_router(pharmacy.router, prefix="/api/pharmacy", tags=["pharmacy"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(ws.router, prefix="/api/ws", tags=["websocket"])
-
+app.include_router(templates.router, prefix="/api/v1/templates", tags=["templates"])
+app.include_router(media.router, prefix="/api/media", tags=["media"])
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
-app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+if not os.path.exists("public_assets"):
+    os.makedirs("public_assets")
+app.mount("/api/public_assets", StaticFiles(directory="public_assets"), name="public_assets")
 
 @app.on_event("startup")
 def on_startup():
@@ -69,6 +77,7 @@ def on_startup():
         seed.seed_db()
     except Exception as e:
         print(f"Error seeding database: {e}")
+        raise
 
 @app.get("/")
 def read_root():

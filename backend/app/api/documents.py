@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -22,7 +23,7 @@ def get_documents(patient_id: int, db: Session = Depends(get_db)):
 
 @router.post("/patients/{patient_id}/documents", response_model=DocumentSchema, dependencies=[Depends(RequirePermission("manage_patients"))])
 async def upload_document(
-    patient_id: int, 
+    patient_id: int,
     type: str = Form(...),
     title: str = Form(...),
     notes: Optional[str] = Form(None),
@@ -48,7 +49,7 @@ async def upload_document(
     file_path = os.path.join(UPLOAD_DIR, f"{patient_id}_{safe_filename}")
     with open(file_path, "wb") as f:
         f.write(content)
-        
+
     db_doc = Document(
         patient_id=patient_id,
         encounter_id=encounter_id,
@@ -68,11 +69,22 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     db_doc = db.query(Document).filter(Document.id == document_id).first()
     if not db_doc:
         raise HTTPException(status_code=404, detail="Document not found")
-        
+
     # Optional: Delete physical file
     if os.path.exists(db_doc.file_path):
         os.remove(db_doc.file_path)
-        
+
     db.delete(db_doc)
     db.commit()
     return {"detail": "Document deleted successfully"}
+
+@router.get("/documents/{document_id}/download", dependencies=[Depends(RequirePermission("view_patients"))])
+def download_document(document_id: int, db: Session = Depends(get_db)):
+    db_doc = db.query(Document).filter(Document.id == document_id).first()
+    if not db_doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not os.path.exists(db_doc.file_path):
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(path=db_doc.file_path, filename=os.path.basename(db_doc.file_path))

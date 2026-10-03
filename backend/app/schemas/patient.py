@@ -6,7 +6,7 @@ from app.schemas.user import User, UserBasic
 class PatientBase(BaseModel):
     first_name: str
     last_name: str
-    dob: date
+    dob: Optional[date] = None
     gender: str
     language: Optional[str] = None
     opd_number: Optional[str] = None
@@ -24,6 +24,7 @@ class PatientCreate(PatientBase):
 class Patient(PatientBase):
     id: int
     class Config:
+        from_attributes = True
         orm_mode = True
 
 class AppointmentStatusConfigBase(BaseModel):
@@ -37,6 +38,7 @@ class AppointmentStatusConfigCreate(AppointmentStatusConfigBase):
 class AppointmentStatusConfig(AppointmentStatusConfigBase):
     id: int
     class Config:
+        from_attributes = True
         orm_mode = True
 
 class AppointmentTypeConfigBase(BaseModel):
@@ -50,6 +52,7 @@ class AppointmentTypeConfigCreate(AppointmentTypeConfigBase):
 class AppointmentTypeConfig(AppointmentTypeConfigBase):
     id: int
     class Config:
+        from_attributes = True
         orm_mode = True
 
 class AppointmentBase(BaseModel):
@@ -69,6 +72,8 @@ class Appointment(AppointmentBase):
     doctor: Optional[UserBasic] = None
     appointment_type: Optional[AppointmentTypeConfig] = None
     last_visit_date: Optional[datetime] = None
+    encounter_id: Optional[int] = None
+    encounter_status: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -83,17 +88,5 @@ class PatientAISummarySchema(PatientAISummaryBase):
     patient_id: int
     last_updated_at: datetime
     class Config:
-        orm_mode = True
-
-class PatientAISummaryBase(BaseModel):
-    summary_text: str
-
-class PatientAISummaryCreate(PatientAISummaryBase):
-    patient_id: int
-
-class PatientAISummarySchema(PatientAISummaryBase):
-    id: int
-    patient_id: int
-    last_updated_at: datetime
-    class Config:
+        from_attributes = True
         orm_mode = True

@@ -6,8 +6,8 @@ from app.core.database import get_db
 from app.models.patient import Patient, Appointment
 from app.models.prescription import Prescription
 from app.schemas.patient import (
-    Patient as PatientSchema, 
-    PatientCreate, 
+    Patient as PatientSchema,
+    PatientCreate,
     Appointment as AppointmentSchema,
     PatientAISummarySchema
 )
@@ -20,27 +20,43 @@ router = APIRouter()
 def get_patients(search: str = None, db: Session = Depends(get_db)):
     query = db.query(Patient).filter(Patient.is_active == 1)
     if search:
+        term = search.strip()
         query = query.filter(or_(
-            Patient.first_name.ilike(f"%{search}%"),
-            Patient.last_name.ilike(f"%{search}%"),
-            Patient.contact_number.ilike(f"%{search}%"),
-            Patient.email.ilike(f"%{search}%")
+            Patient.first_name.ilike(f"%{term}%"),
+            Patient.last_name.ilike(f"%{term}%"),
+            Patient.opd_number.ilike(f"%{term}%"),
+            Patient.contact_number.ilike(f"%{term}%"),
+            Patient.email.ilike(f"%{term}%")
         ))
     return query.all()
 
 @router.post("/", response_model=PatientSchema, dependencies=[Depends(RequirePermission("manage_patients"))])
 def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
-    db_patient = Patient(**patient.dict())
+    data = patient.dict()
+    raw_opd = data.get("opd_number")
+    clean_opd = raw_opd.strip() if raw_opd and str(raw_opd).strip() else None
+    data["opd_number"] = clean_opd
+
+    if clean_opd:
+        existing = db.query(Patient).filter(Patient.opd_number == clean_opd, Patient.is_active == 1).first()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"OPD number '{clean_opd}' is already assigned to patient {existing.first_name} {existing.last_name} (ID: {existing.id}).")
+
+    db_patient = Patient(**data)
     db.add(db_patient)
-    db.flush()
-    
+    try:
+        db.flush()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Duplicate patient record or OPD number: {exc}")
+
     # Create initial "First Time" summary
     from app.models.patient import PatientAISummary
     db_summary = PatientAISummary(patient_id=db_patient.id, summary_text="First Time")
     db.add(db_summary)
     db.commit()
     db.refresh(db_patient)
-    
+
     return db_patient
 
 @router.get("/{patient_id}", response_model=PatientSchema, dependencies=[Depends(RequirePermission("view_patients"))])
@@ -55,11 +71,29 @@ def update_patient(patient_id: int, patient_update: PatientCreate, db: Session =
     db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not db_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    
-    for var, value in patient_update.model_dump(exclude_unset=True).items():
+
+    update_data = patient_update.model_dump(exclude_unset=True)
+    if "opd_number" in update_data:
+        raw_opd = update_data.get("opd_number")
+        clean_opd = raw_opd.strip() if raw_opd and str(raw_opd).strip() else None
+        update_data["opd_number"] = clean_opd
+        if clean_opd:
+            conflict = db.query(Patient).filter(
+                Patient.opd_number == clean_opd,
+                Patient.id != patient_id,
+                Patient.is_active == 1
+            ).first()
+            if conflict:
+                raise HTTPException(status_code=409, detail=f"OPD number '{clean_opd}' is already assigned to another patient.")
+
+    for var, value in update_data.items():
         setattr(db_patient, var, value)
-        
-    db.commit()
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Conflict updating patient: {exc}")
     db.refresh(db_patient)
     return db_patient
 
@@ -68,7 +102,7 @@ def delete_patient(patient_id: int, db: Session = Depends(get_db)):
     db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not db_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    
+
     db_patient.is_active = 0 # soft delete
     db.commit()
     return {"detail": "Patient deleted successfully"}
@@ -78,7 +112,7 @@ def get_patient_prescriptions(patient_id: int, db: Session = Depends(get_db)):
     db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not db_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-        
+
     prescriptions = db.query(Prescription).filter(Prescription.patient_id == patient_id).order_by(Prescription.date_prescribed.desc()).all()
     return prescriptions
 
@@ -87,7 +121,7 @@ def get_patient_ai_summary(patient_id: int, db: Session = Depends(get_db)):
     db_patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not db_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-        
+
     from app.models.patient import PatientAISummary
     summary = db.query(PatientAISummary).filter(PatientAISummary.patient_id == patient_id).first()
     return summary

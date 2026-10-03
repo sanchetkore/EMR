@@ -11,7 +11,7 @@ class Patient(Base):
     dob = Column(Date)
     gender = Column(String)
     language = Column(String, nullable=True)
-    opd_number = Column(String, nullable=True)
+    opd_number = Column(String, nullable=True, unique=True, index=True)
     contact_number = Column(String)
     email = Column(String, unique=True, index=True, nullable=True)
     blood_group = Column(String, nullable=True)
@@ -19,7 +19,7 @@ class Patient(Base):
     emergency_phone = Column(String, nullable=True)
     address = Column(Text, nullable=True)
     is_active = Column(Integer, default=1) # 1 active, 0 inactive
-    
+
     appointments = relationship("Appointment", back_populates="patient")
     ai_summaries = relationship("PatientAISummary", back_populates="patient")
 
@@ -46,7 +46,7 @@ class Appointment(Base):
     appointment_time = Column(DateTime, default=datetime.utcnow, index=True)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     token_number = Column(String, nullable=True)
-    
+
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("User")
     appointment_type = relationship("AppointmentTypeConfig")
@@ -59,5 +59,5 @@ class PatientAISummary(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
     summary_text = Column(Text, nullable=False)
     last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     patient = relationship("Patient", back_populates="ai_summaries")

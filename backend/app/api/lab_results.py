@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
-from sqlalchemy import cast, Date, or_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import cast, Date, or_, and_
 from typing import List, Optional
 from datetime import datetime, date as date_type
 from app.core.database import get_db
@@ -42,30 +42,36 @@ def get_lab_results_history(patient_id: int, test_name: Optional[str] = None, li
 def get_latest_lab_results(patient_id: int, db: Session = Depends(get_db)):
     """Fetch all lab results ordered on the most recent date for this patient."""
     latest_result = db.query(LabResult).filter(LabResult.patient_id == patient_id).order_by(LabResult.ordered_date.desc()).first()
-    
+
     if not latest_result:
         return []
-        
+
     latest_date = latest_result.ordered_date.date()
-    
+
+    start_of_day = datetime.combine(latest_date, datetime.min.time())
+    end_of_day = datetime.combine(latest_date, datetime.max.time())
+
     return db.query(LabResult).filter(
         LabResult.patient_id == patient_id,
-        cast(LabResult.ordered_date, Date) == latest_date
+        LabResult.ordered_date >= start_of_day,
+        LabResult.ordered_date <= end_of_day
     ).all()
 
 @router.get("/lab_results/by_date", response_model=List[LabOrderResponse], dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_lab_results_by_date(date: date_type, status: Optional[str] = None, db: Session = Depends(get_db)):
-    """Fetch all lab results from a specific date across all patients."""
-    query = db.query(LabResult).filter(
+    start_of_day = datetime.combine(date, datetime.min.time())
+    end_of_day = datetime.combine(date, datetime.max.time())
+
+    query = db.query(LabResult).options(joinedload(LabResult.patient)).filter(
         or_(
-            cast(LabResult.ordered_date, Date) == date,
-            cast(LabResult.result_date, Date) == date
+            and_(LabResult.ordered_date >= start_of_day, LabResult.ordered_date <= end_of_day),
+            and_(LabResult.result_date >= start_of_day, LabResult.result_date <= end_of_day)
         )
     )
     if status:
         query = query.filter(LabResult.status == status)
     results = query.order_by(LabResult.ordered_date.desc()).all()
-    
+
     response = []
     for r in results:
         patient_data = None
@@ -80,18 +86,18 @@ def get_lab_results_by_date(date: date_type, status: Optional[str] = None, db: S
 @router.get("/lab_results/orders/queue", response_model=List[LabOrderResponse], dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_lab_orders_queue(status: Optional[str] = "Pending", db: Session = Depends(get_db)):
     """Fetch a global queue of all lab orders/appointments across all patients."""
-    query = db.query(LabResult)
+    query = db.query(LabResult).options(joinedload(LabResult.patient))
     if status:
         query = query.filter(LabResult.status == status)
-        
+
     results = query.order_by(LabResult.ordered_date.desc()).all()
-    
+
     response = []
     for r in results:
         patient_data = None
         if r.patient:
             patient_data = PatientSchema.model_validate(r.patient, from_attributes=True)
-            
+
         response.append(LabOrderResponse(
             lab_result=LabResultSchema.model_validate(r, from_attributes=True),
             patient=patient_data
@@ -114,10 +120,10 @@ def update_combo_catalog_item(combo_id: int, combo_update: ComboLabTestCreate, d
     db_item = db.query(ComboLabTest).filter(ComboLabTest.id == combo_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Combo not found")
-        
+
     for var, value in vars(combo_update).items():
         setattr(db_item, var, value)
-        
+
     db.commit()
     db.refresh(db_item)
     return db_item
@@ -127,7 +133,7 @@ def delete_combo_catalog_item(combo_id: int, db: Session = Depends(get_db)):
     db_item = db.query(ComboLabTest).filter(ComboLabTest.id == combo_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Combo not found")
-        
+
     db.delete(db_item)
     db.commit()
     return {"detail": "Combo deleted successfully"}
@@ -137,14 +143,14 @@ def order_combo(payload: OrderComboPayload, db: Session = Depends(get_db)):
     combo = db.query(ComboLabTest).filter(ComboLabTest.id == payload.combo_id).first()
     if not combo:
         raise HTTPException(status_code=404, detail="Combo not found")
-        
+
     created_results = []
-    
+
     for test_id in combo.test_ids:
         catalog_item = db.query(LabCatalog).filter(LabCatalog.id == test_id).first()
         if not catalog_item:
             continue # Skip invalid test IDs
-            
+
         new_result = LabResult(
             patient_id=payload.patient_id,
             encounter_id=payload.encounter_id,
@@ -157,11 +163,11 @@ def order_combo(payload: OrderComboPayload, db: Session = Depends(get_db)):
         )
         db.add(new_result)
         created_results.append(new_result)
-        
+
     db.commit()
     for result in created_results:
         db.refresh(result)
-        
+
     return created_results
 
 @router.post("/lab_results", response_model=LabResultSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
@@ -184,20 +190,20 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks
     db_lab = db.query(LabResult).filter(LabResult.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab Result not found")
-    
+
     for var, value in vars(lab_update).items():
         setattr(db_lab, var, value)
-        
+
     if lab_update.status == "Completed" and not db_lab.result_date:
         db_lab.result_date = datetime.utcnow()
-        
+
         # Phase 7: Automated Billing Integration
         final_cost = db_lab.cost
         if final_cost is None and db_lab.catalog_id:
             catalog_item = db.query(LabCatalog).filter(LabCatalog.id == db_lab.catalog_id).first()
             if catalog_item:
                 final_cost = catalog_item.price
-        
+
         if final_cost is not None and final_cost > 0:
             # Find an active Pending invoice
             invoice = db.query(Invoice).filter(Invoice.patient_id == db_lab.patient_id, Invoice.status == "Pending").first()
@@ -206,7 +212,7 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks
                 db.add(invoice)
                 db.commit()
                 db.refresh(invoice)
-            
+
             invoice_item = InvoiceItem(
                 invoice_id=invoice.id,
                 service_name=f"Lab Test: {db_lab.test_name}",
@@ -215,19 +221,35 @@ def update_lab_result(lab_id: int, lab_update: LabResultCreate, background_tasks
             )
             db.add(invoice_item)
             invoice.amount = (invoice.amount or 0.0) + final_cost
-            
-    db.commit()
+
     db.commit()
     db.refresh(db_lab)
-    
+
     if lab_update.status == "Completed":
+        try:
+            from app.services.open_loops_engine import match_open_loops
+            match_open_loops(
+                db=db,
+                patient_id=db_lab.patient_id,
+                event_type="lab",
+                test_name_or_code=db_lab.test_name,
+                result_id=db_lab.id,
+            )
+        except Exception as e:
+            print(f"Error matching open loops: {e}")
+
         from app.services.ai_summary_service import schedule_lab_ai_summary
-        
+
         background_tasks.add_task(
             schedule_lab_ai_summary,
             patient_id=db_lab.patient_id
         )
-        
+
+        from app.services.whatsapp_service import send_lab_report_whatsapp
+        from app.services.sms_service import send_lab_report_sms
+        background_tasks.add_task(send_lab_report_whatsapp, db_lab.patient_id, db_lab.id)
+        background_tasks.add_task(send_lab_report_sms, db_lab.patient_id)
+
     return db_lab
 
 @router.delete("/lab_results/{lab_id}", dependencies=[Depends(RequirePermission("manage_clinical"))])
@@ -235,7 +257,7 @@ def delete_lab_result(lab_id: int, db: Session = Depends(get_db)):
     db_lab = db.query(LabResult).filter(LabResult.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab Result not found")
-        
+
     db.delete(db_lab)
     db.commit()
     return {"detail": "Lab Result deleted successfully"}

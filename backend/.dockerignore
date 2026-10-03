@@ -5,3 +5,9 @@ emr.db
 uploads/
 secure_uploads/
 alembic/
+.git
+*.db
+*.db-*
+*.tar
+*.tar.gz
+public_assets/

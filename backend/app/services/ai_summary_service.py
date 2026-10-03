@@ -21,8 +21,8 @@ You will be provided with:
 Follow these strict rules:
 - RETAIN all chronic conditions, major historical surgeries, and long-term medications from the EXISTING SUMMARY.
 - INTEGRATE any new diagnoses, significant medication changes, or critical lab results from the NEW VISIT NOTE.
-- REMOVE or mark as resolved any minor, acute, or temporary issues from the EXISTING SUMMARY that are no longer relevant (e.g., past common colds, healed minor fractures).
-- FORMAT the output as a concise, bulleted list. Do not write full paragraphs. 
+- Mark an issue as resolved ONLY when the clinician explicitly records its resolution. Do not infer resolution from elapsed time or omission in a new note.
+- FORMAT the output as a concise, bulleted list. Do not write full paragraphs.
 - KEEP IT SHORT. The final output must not exceed 150 words.
 - STRICTLY DO NOT invent or hallucinate any medical information. If the text does not explicitly state it, do not include it."""
 
@@ -51,10 +51,10 @@ def process_and_save_ai_summary(patient_id: int, new_data_str: str, db: Session)
     # Fetch existing summary
     db_summary = db.query(PatientAISummary).filter(PatientAISummary.patient_id == patient_id).first()
     existing_text = db_summary.summary_text if db_summary else ""
-    
+
     # Generate new summary
     new_text = generate_updated_summary(existing_text, new_data_str)
-    
+
     # Save or update summary
     if db_summary:
         if new_text and new_text != existing_text:
@@ -77,7 +77,7 @@ def schedule_lab_ai_summary(patient_id: int):
     with _timer_lock:
         if patient_id in _lab_summary_timers:
             _lab_summary_timers[patient_id].cancel()
-        
+
         timer = threading.Timer(10.0, execute_lab_ai_summary, args=[patient_id])
         _lab_summary_timers[patient_id] = timer
         timer.start()
@@ -86,22 +86,22 @@ def execute_lab_ai_summary(patient_id: int):
     with _timer_lock:
         if patient_id in _lab_summary_timers:
             del _lab_summary_timers[patient_id]
-            
+
     db = SessionLocal()
     try:
         from app.models.lab_result import LabResult
         import json
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        
+
         todays_labs = db.query(LabResult).filter(
             LabResult.patient_id == patient_id,
             LabResult.status == "Completed",
             LabResult.result_date >= today_start
         ).all()
-        
+
         if not todays_labs:
             return
-            
+
         lab_details = []
         for lab in todays_labs:
             lab_details.append({
@@ -111,7 +111,7 @@ def execute_lab_ai_summary(patient_id: int):
                 "reference_range": lab.reference_range,
                 "notes": lab.notes
             })
-            
+
         new_data_str = f"Lab Test Date: {datetime.utcnow().date()}\n" + json.dumps(lab_details, indent=2)
         process_and_save_ai_summary(patient_id, new_data_str, db)
     except Exception as e:
