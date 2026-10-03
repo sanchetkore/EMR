@@ -1,9 +1,0 @@
-[submodule "EMR-UI"]
-    path = EMR-UI
-    url = https://github.com/vishal-bashetti/EMR-UI.git
-[submodule "EMR-Queue"]
-    path = EMR-Queue
-    url = https://github.com/sanchetkore/emr-que.git
-[submodule "EMR-UI - Copy"]
-    path = EMR-UI - Copy
-    url = https://github.com/vishal-bashetti/EMR-UI.git

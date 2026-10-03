@@ -36,3 +36,6 @@ EMR-UI - Copy/
 *.tar.gz
 public_assets/
 backend/public_assets/
+# Frontends are maintained in their own repositories.
+/EMR-UI/
+/EMR-Queue/
