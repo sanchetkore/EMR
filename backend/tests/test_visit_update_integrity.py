@@ -101,6 +101,7 @@ def load_create_prescription_route():
     namespace = {
         "PrescriptionCreate": PrescriptionCreate, "BackgroundTasks": BackgroundTasks,
         "Session": Session, "Depends": Depends, "get_db": lambda: None,
+        "RequirePermission": lambda permission: None, "User": object,
         "Encounter": Encounter, "Prescription": Prescription,
         "PrescriptionItem": PrescriptionItem, "HTTPException": HTTPException,
     }
@@ -124,7 +125,7 @@ class VisitUpdateIntegrityTests(unittest.TestCase):
         self.amend = load_amendment_route()
         self.create_prescription = load_create_prescription_route()
         self.background = SimpleNamespace(add_task=lambda *args, **kwargs: None)
-        self.clinician = SimpleNamespace(id=2)
+        self.clinician = SimpleNamespace(id=2, role=SimpleNamespace(name="Doctor"))
 
     def tearDown(self):
         self.db.close()
@@ -212,7 +213,7 @@ class VisitUpdateIntegrityTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:
             self.create_prescription(
                 PrescriptionCreate(patient_id=1, doctor_id=2, encounter_id=1, items=[]),
-                self.background, self.db,
+                self.background, self.db, self.clinician,
             )
         self.assertEqual(error.exception.status_code, 409)
         self.assertEqual(self.db.query(Prescription).count(), 0)
