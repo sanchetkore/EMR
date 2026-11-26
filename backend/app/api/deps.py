@@ -1,9 +1,9 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
+from jwt import InvalidTokenError as JWTError
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.database import get_db
-from app.core.security import SECRET_KEY, ALGORITHM
+from app.core.security import decode_session_token, validate_session
 from app.models.user import User, Role, Permission
 from app.schemas.token import TokenData
 
@@ -16,7 +16,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_session_token(token, "access")
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -32,7 +32,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         .filter(User.username == token_data.username)
         .first()
     )
-    if user is None:
+    if not validate_session(db, user, payload):
         raise credentials_exception
     return user
 
@@ -62,12 +62,12 @@ async def get_current_user_ws(token: str):
     from app.core.database import SessionLocal
     db = SessionLocal()
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_session_token(token, "access")
         username: str = payload.get("sub")
         if username is None:
             return None
         user = db.query(User).filter(User.username == username).first()
-        return user
+        return user if validate_session(db, user, payload) else None
     except JWTError:
         return None
     finally:

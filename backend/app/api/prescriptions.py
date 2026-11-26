@@ -6,6 +6,7 @@ from app.models.prescription import Prescription, PrescriptionItem
 from app.models.encounter import Encounter
 from app.schemas.prescription import Prescription as PrescriptionSchema, PrescriptionCreate
 from app.api.deps import RequirePermission
+from app.models.user import User
 from app.core.websocket import manager
 from app.api.queue import get_live_queue
 
@@ -20,8 +21,10 @@ def get_prescriptions(patient_id: Optional[int] = None, encounter_id: Optional[i
         query = query.filter(Prescription.encounter_id == encounter_id)
     return query.all()
 
-@router.post("/", response_model=PrescriptionSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
-def create_prescription(prescription: PrescriptionCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@router.post("/", response_model=PrescriptionSchema)
+def create_prescription(prescription: PrescriptionCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(RequirePermission("manage_clinical"))):
+    if not current_user.role or current_user.role.name != "Doctor" or prescription.doctor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Prescriptions must be attributed to the authenticated doctor")
     if prescription.encounter_id:
         encounter = db.query(Encounter).filter(Encounter.id == prescription.encounter_id).first()
         if not encounter or encounter.patient_id != prescription.patient_id:
@@ -34,7 +37,9 @@ def create_prescription(prescription: PrescriptionCreate, background_tasks: Back
     db.flush()
 
     for item in prescription.items:
-        db_item = PrescriptionItem(**item.dict(), prescription_id=db_prescription.id)
+        item_data = item.dict(exclude={"name"})
+        item_data["molecule"] = item.molecule or item.name
+        db_item = PrescriptionItem(**item_data, prescription_id=db_prescription.id)
         db.add(db_item)
 
     db.commit()

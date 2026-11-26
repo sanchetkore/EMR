@@ -34,7 +34,7 @@ class NotificationSettings(BaseSettings):
     appointment_schedule: Optional[AppointmentScheduleSettings] = Field(default_factory=AppointmentScheduleSettings)
     next_appointment_schedule: Optional[NextAppointmentScheduleSettings] = Field(default_factory=NextAppointmentScheduleSettings)
     treatment_reminder: Optional[TreatmentReminderSettings] = Field(default_factory=TreatmentReminderSettings)
-    messaging_api_key: Optional[str] = None
+    messaging_api_key: Optional[str] = Field(default=None, exclude=True)
     sms_sender_id: Optional[str] = None
 
 class ClinicProfileBase(BaseModel):

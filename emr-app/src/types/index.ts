@@ -402,14 +402,25 @@ export interface LiveQueue {
   ongoing: QueueEntry[]
   waiting: QueueEntry[]
 }
-e x p o r t  
- i n t e r f a c e  
- C l i n i c  
-   i d :   n u m b e r ;   n a m e :   s t r i n g ;   a d d r e s s :   s t r i n g ;   s u p p o r t _ e m a i l :   s t r i n g ;   p h o n e :   s t r i n g ;   w h a t s a p p :   s t r i n g ;   w e b s i t e :   s t r i n g ;    
- a p p _ l i n k :   s t r i n g ;   l o g o _ p a t h :   s t r i n g ;    
- e x p o r t  
- i n t e r f a c e  
- C l i n i c I n p u t  
-   n a m e :   s t r i n g ;   a d d r e s s :   s t r i n g ;   s u p p o r t _ e m a i l :   s t r i n g ;   p h o n e :   s t r i n g ;   w h a t s a p p :   s t r i n g ;   w e b s i t e :   s t r i n g ;   a p p _ l i n k :    
- s t r i n g ;    
- 
+
+export interface Clinic {
+  id: number
+  name: string
+  address: string
+  support_email: string
+  phone: string
+  whatsapp: string
+  website: string
+  app_link: string
+  logo_path: string
+}
+
+export interface ClinicInput {
+  name: string
+  address: string
+  support_email: string
+  phone: string
+  whatsapp: string
+  website: string
+  app_link: string
+}

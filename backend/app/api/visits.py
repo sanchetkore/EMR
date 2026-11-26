@@ -401,7 +401,7 @@ def update_visit(encounter_id: int, payload: VisitUpdate, background_tasks: Back
             db.flush()
 
         for p_item in prescriptions_data:
-            valid_keys = {"molecule", "morning", "afternoon", "evening", "night", "when", "details"}
+            valid_keys = {"molecule", "morning", "afternoon", "evening", "night", "when", "details", "duration_days"}
             filtered_item = {k: v for k, v in p_item.items() if k in valid_keys}
 
             # Ensure required field 'molecule' exists (fallback to empty string if frontend sends something else)

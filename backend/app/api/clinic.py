@@ -1,17 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 import os
+import uuid
 from typing import Optional
 from app.core.database import get_db
 from app.models.clinic import ClinicProfile
 from app.schemas.clinic import ClinicProfile as ClinicProfileSchema, ClinicProfileUpdate
 from app.api.deps import RequirePermission
+from app.services.pickup_slots import PickupSchedule, pickup_schedule
 
 router = APIRouter()
 UPLOAD_DIR = "public_assets"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
+
+@router.get("/pickup-schedule", response_model=PickupSchedule, dependencies=[Depends(RequirePermission("manage_settings"))])
+def get_pickup_schedule(db: Session = Depends(get_db)):
+    return pickup_schedule(db)[1]
+
+
+@router.put("/pickup-schedule", response_model=PickupSchedule, dependencies=[Depends(RequirePermission("manage_settings"))])
+def save_pickup_schedule(schedule: PickupSchedule, db: Session = Depends(get_db)):
+    row, _ = pickup_schedule(db, lock=True)
+    row.value = schedule.model_dump_json()
+    db.commit()
+    return schedule
 
 @router.get("/", response_model=ClinicProfileSchema)
 def get_clinic_profile(db: Session = Depends(get_db)):
@@ -114,10 +128,17 @@ async def upload_clinic_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    safe_filename = os.path.basename(file.filename.replace("\\", "/"))
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg"} or file.content_type not in {"image/png", "image/jpeg"}:
+        raise HTTPException(400, "Logo must be a PNG or JPEG image")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Logo exceeds 5 MB")
+    if not (content.startswith(b"\x89PNG\r\n\x1a\n") or content.startswith(b"\xff\xd8\xff")):
+        raise HTTPException(400, "Invalid image content")
+    safe_filename = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(UPLOAD_DIR, f"clinic_logo_{safe_filename}")
     with open(file_path, "wb") as f:
-        content = await file.read()
         f.write(content)
 
     profile = db.query(ClinicProfile).filter(ClinicProfile.id == 1).first()

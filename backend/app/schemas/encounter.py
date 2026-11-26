@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 from typing import Optional, List
-from app.schemas.prescription import PrescriptionItemCreate, Prescription
+from app.schemas.prescription import PrescriptionDurationDays, PrescriptionItemCreate, Prescription
 from app.schemas.patient import Appointment as AppointmentSchema
 from datetime import datetime, date
 
@@ -145,6 +145,15 @@ class VisitUpdate(BaseModel):
     prescriptions: Optional[List[dict]] = None
     lab_test_catalogs: Optional[List[int]] = None
     lis_order: Optional[VisitLabOrderRequest] = None
+
+    @field_validator("prescriptions")
+    @classmethod
+    def validate_prescription_durations(cls, items):
+        if items is not None:
+            duration_adapter = TypeAdapter(Optional[PrescriptionDurationDays])
+            for item in items:
+                duration_adapter.validate_python(item.get("duration_days"))
+        return items
 
 
 class VisitLabOrderIntent(BaseModel):

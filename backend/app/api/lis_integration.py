@@ -4,12 +4,13 @@ import json
 import re
 import uuid
 from datetime import datetime, date
+from typing import Annotated
 from urllib.parse import urlparse, quote
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -35,6 +36,29 @@ class LISOrderRequest(BaseModel):
     package_codes: list[str] | None = None
     source_id: str = Field(min_length=1, max_length=64)
     notes: str | None = Field(default=None, max_length=1000)
+
+
+class LISReportResult(BaseModel):
+    testName: str
+    value: str | float | None = None
+    unit: str | None = None
+    referenceRange: str | None = None
+    flag: str | None = None
+    reviewerComment: str | None = None
+
+
+class LISPatientReport(BaseModel):
+    id: str
+    accessionNumber: str
+    version: int
+    releasedAt: datetime
+    resultsSnapshot: list[LISReportResult]
+
+
+class LISReportEnvelope(LISPatientReport):
+    patientId: str
+    status: str
+    isLatest: bool
 
 
 def _extract_lis_host(host_url: str) -> str:
@@ -255,6 +279,63 @@ def disconnect_lis(db: Session = Depends(get_db)):
         db.delete(row)
         db.commit()
     return {"connected": False, "status": "NOT_CONFIGURED"}
+
+
+@router.get("/patients/{patient_id}/reports", response_model=list[LISPatientReport])
+def get_patient_reports(
+    patient_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    _user=Depends(RequirePermission("view_clinical")),
+    accession_number: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+):
+    response.headers["Cache-Control"] = "no-store"
+    if not db.get(Patient, patient_id):
+        raise HTTPException(status_code=404, detail="Patient not found.")
+    return fetch_released_patient_reports(db, patient_id, accession_number)
+
+
+def fetch_released_patient_reports(
+    db: Session, patient_id: int, accession_number: str | None = None,
+    *, report_params: dict | None = None,
+) -> list[LISPatientReport]:
+    config = _load_config(db)
+    if not config:
+        return []
+    if not config.get("api_key"):
+        raise HTTPException(status_code=409, detail="Reconnect LIS with a clinic integration key to read reports.")
+
+    connection_id = config.get("connection_id")
+    if not connection_id:
+        try:
+            connection_id = _connection_identity(config, _request(config, "GET", "/integrations/catalog"))
+        except HTTPException as error:
+            raise HTTPException(status_code=502, detail="Could not verify the LIS connection.") from error
+
+    identities = db.query(PatientExternalIdentity).filter(PatientExternalIdentity.lis_host == connection_id)
+    identity = identities.filter(PatientExternalIdentity.patient_id == patient_id).one_or_none()
+    if not identity:
+        return []
+    remote_id = identity.remote_patient_id
+    if identities.filter(
+        PatientExternalIdentity.remote_patient_id == remote_id,
+        PatientExternalIdentity.patient_id != patient_id,
+    ).first():
+        raise HTTPException(status_code=409, detail="This LIS patient link must be reconciled before reports can be shown.")
+    try:
+        params = dict(report_params or {})
+        if accession_number is not None:
+            params["accession_number"] = accession_number
+        payload = _request(config, "GET", f"/integrations/patients/{quote(remote_id, safe='')}/reports",
+                           **({"params": params} if params else {}))
+        reports = TypeAdapter(list[LISReportEnvelope]).validate_python(payload)
+    except (HTTPException, ValidationError) as error:
+        raise HTTPException(status_code=502, detail="Could not load released reports from LIS.") from error
+    if any(report.patientId != remote_id or report.status != "Released" or not report.isLatest for report in reports):
+        raise HTTPException(status_code=502, detail="LIS returned reports that do not match the patient link.")
+    if accession_number is not None:
+        return [report for report in reports if report.accessionNumber == accession_number]
+    return reports
 
 
 @router.get("/catalog")

@@ -1,0 +1,68 @@
+services:
+  redis:
+    image: redis:7
+    container_name: emr_redis
+    restart: always
+    expose:
+      - "6379"
+    volumes:
+      - redisdata:/data
+
+  backend:
+    image: emr:latest
+    container_name: emr_backend
+    restart: always
+    ports:
+      - "${EMR_BACKEND_BIND_IP:-127.0.0.1}:9000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+      - ./secure_uploads:/app/secure_uploads
+
+  lis-order-worker:
+    image: emr:latest
+    restart: always
+    command: python -m scripts.run_lis_order_intents
+    env_file:
+      - .env
+    depends_on:
+      - backend
+
+  ui:
+    image: emr-ui:latest
+    container_name: emr_ui
+    restart: always
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - proxynet
+      - default
+
+  queue:
+    image: emr-queue:latest
+    container_name: emr_queue
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - proxynet
+      - default
+
+volumes:
+  redisdata:
+
+networks:
+  proxynet:
+    external: true
+  default:

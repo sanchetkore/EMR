@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 from app.schemas.user import User, UserBasic
@@ -23,6 +23,12 @@ class PatientCreate(PatientBase):
 
 class Patient(PatientBase):
     id: int
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def format_missing_gender(cls, value):
+        return "" if value is None else value
+
     class Config:
         from_attributes = True
         orm_mode = True

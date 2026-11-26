@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import cast, Date, or_, and_
 from typing import List, Optional
-from datetime import datetime, date as date_type
+from datetime import datetime, date as date_type, timedelta
 from app.core.database import get_db
 from app.schemas.lab_result import LabResult as LabResultSchema, LabResultCreate, LabCatalog as LabCatalogSchema, LabCatalogCreate, LabOrderResponse, ComboLabTestSchema, ComboLabTestCreate, OrderComboPayload
 from app.models.lab_result import LabResult, LabCatalog, ComboLabTest
 from app.models.clinical import Invoice, InvoiceItem
 from app.schemas.patient import Patient as PatientSchema
 from app.api.deps import RequirePermission
+from app.api.lis_integration import fetch_released_patient_reports
+from app.services.lab_report_recency import completed_lab_results, manual_report_date, report_recency
 
 router = APIRouter()
 
@@ -56,6 +58,37 @@ def get_latest_lab_results(patient_id: int, db: Session = Depends(get_db)):
         LabResult.ordered_date >= start_of_day,
         LabResult.ordered_date <= end_of_day
     ).all()
+
+@router.get("/patients/{patient_id}/lab_results/recent_findings", dependencies=[Depends(RequirePermission("view_clinical"))])
+def get_recent_lab_findings(patient_id: int, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    query = completed_lab_results(db, patient_id)
+    latest_manual = query.first()
+    manual_date = (latest_manual.result_date or latest_manual.ordered_date) if latest_manual else None
+    reports = fetch_released_patient_reports(db, patient_id)
+    latest_lis = max(reports, key=lambda report: report_recency(report.releasedAt), default=None)
+
+    if latest_lis and report_recency(latest_lis.releasedAt) >= report_recency(manual_date):
+        return {"source": "LIS", "reportedAt": report_recency(latest_lis.releasedAt), "results": [
+            {"name": result.testName, "value": result.value, "unit": result.unit}
+            for result in latest_lis.resultsSnapshot
+        ]}
+
+    if latest_manual is None:
+        return {"source": None, "reportedAt": None, "results": []}
+    if manual_date is None:
+        results = query.filter(manual_report_date.is_(None)).all()
+    else:
+        start_of_day = datetime.combine(manual_date.date(), datetime.min.time())
+        results = query.filter(
+            manual_report_date >= start_of_day,
+            manual_report_date < start_of_day + timedelta(days=1),
+        ).all()
+    return {"source": "EMR", "reportedAt": report_recency(manual_date) if manual_date else None, "results": [
+        {"name": result.test_name, "value": result.result_value, "unit": result.unit}
+        for result in results
+    ]}
+
 
 @router.get("/lab_results/by_date", response_model=List[LabOrderResponse], dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_lab_results_by_date(date: date_type, status: Optional[str] = None, db: Session = Depends(get_db)):

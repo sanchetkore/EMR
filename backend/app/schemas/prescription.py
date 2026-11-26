@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Annotated, Optional, List
 from datetime import datetime
+
+PrescriptionDurationDays = Annotated[int, Field(strict=True, gt=0, le=2_147_483_647)]
 
 class PrescriptionItemBase(BaseModel):
     molecule: Optional[str] = ""
@@ -10,6 +12,7 @@ class PrescriptionItemBase(BaseModel):
     evening: Optional[str] = None
     night: Optional[str] = None
     when: Optional[str] = None
+    duration_days: Optional[PrescriptionDurationDays] = None
     details: Optional[str] = None
 
 class PrescriptionItemCreate(PrescriptionItemBase):

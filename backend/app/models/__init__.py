@@ -30,3 +30,10 @@ from app.models.patient_brain import (
     BrainCorrection,
     ConversationState,
 )
+from app.models.mobile import (
+    MobileDeviceToken,
+    MobileOtp,
+    MobileBloodPickup,
+    MobilePatientAlert,
+    MobilePaymentRecord,
+)
