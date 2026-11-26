@@ -192,8 +192,8 @@ def generate_prescription_pdf(db: Session, prescription_id: int) -> str:
     pdf.ln(4)
 
     # Table header
-    col_widths = [10, 55, 45, 35, 45]
-    headers = ["#", "Medicine", "Dosage (M-A-E-N)", "When", "Notes"]
+    col_widths = [10, 50, 40, 30, 20, 40]
+    headers = ["#", "Medicine", "Dosage (M-A-E-N)", "When", "Days", "Notes"]
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(71, 85, 105)
     pdf.set_fill_color(241, 245, 249)
@@ -232,10 +232,11 @@ def generate_prescription_pdf(db: Session, prescription_id: int) -> str:
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(71, 85, 105)
         pdf.cell(col_widths[3], 7, (item.when or "As directed")[:18])
+        pdf.cell(col_widths[4], 7, str(item.duration_days) if item.duration_days is not None else "-")
 
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(130, 130, 130)
-        pdf.cell(col_widths[4], 7, (item.details or "-")[:25])
+        pdf.cell(col_widths[5], 7, (item.details or "-")[:25])
         pdf.ln()
 
         # Row separator

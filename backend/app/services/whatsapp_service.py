@@ -61,13 +61,12 @@ def _send_whatsapp(base_url: str, api_key: str, template_id: str, phone: str, va
     try:
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode("utf-8"))
-            logger.info(f"WhatsApp message sent: {res_data}")
+            logger.info("WhatsApp message accepted")
             return res_data
     except urllib.error.HTTPError as e:
-        error_msg = e.read().decode("utf-8")
-        logger.error(f"WhatsApp send failed ({e.code}): {error_msg}")
+        logger.error("WhatsApp send failed (%s)", e.code)
     except Exception as e:
-        logger.error(f"WhatsApp send failed: {e}")
+        logger.error("WhatsApp send failed (%s)", type(e).__name__)
 
 
 def _format_phone(contact_number: str) -> str:

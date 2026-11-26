@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -48,3 +48,12 @@ class User(Base):
     @property
     def visible_tabs(self):
         return [t.tab_name for t in self.tabs]
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    refresh_digest = Column(String(64), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked = Column(Boolean, nullable=False, default=False)

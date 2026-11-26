@@ -28,6 +28,7 @@ class PrescriptionItem(Base):
     evening = Column(String, nullable=True)
     night = Column(String, nullable=True)
     when = Column(String, nullable=True) # e.g. Before food, After food
+    duration_days = Column(Integer, nullable=True)
     details = Column(Text, nullable=True)
     
     prescription = relationship("Prescription", back_populates="items")

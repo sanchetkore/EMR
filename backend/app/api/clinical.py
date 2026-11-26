@@ -2,13 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.clinical import Vitals, Consultation, Invoice, InvoiceItem, Template, TemplateItem
+from app.models.patient import Appointment
 from app.schemas.clinical import Vitals as VitalsSchema, VitalsCreate, Consultation as ConsultationSchema, ConsultationCreate, Template as TemplateSchema, TemplateCreate
 from app.api.deps import RequirePermission
 
 router = APIRouter()
 
+
+def validate_vitals_appointment(db: Session, appointment_id: int, patient_id: int):
+    appointment = db.get(Appointment, appointment_id)
+    if not appointment or appointment.patient_id != patient_id:
+        raise HTTPException(status_code=422, detail="Vitals appointment does not belong to this patient")
+
 @router.post("/vitals", response_model=VitalsSchema, dependencies=[Depends(RequirePermission("manage_clinical"))])
 def create_vitals(vitals: VitalsCreate, db: Session = Depends(get_db)):
+    validate_vitals_appointment(db, vitals.appointment_id, vitals.patient_id)
     # Calculate BMI if weight and height are provided
     if vitals.weight and vitals.height:
         # height in cm, weight in kg. BMI = weight / (height/100)^2
@@ -23,7 +31,9 @@ def create_vitals(vitals: VitalsCreate, db: Session = Depends(get_db)):
 
 @router.get("/vitals/{appointment_id}", response_model=VitalsSchema, dependencies=[Depends(RequirePermission("view_clinical"))])
 def get_vitals(appointment_id: int, db: Session = Depends(get_db)):
-    vitals = db.query(Vitals).filter(Vitals.appointment_id == appointment_id).first()
+    vitals = db.query(Vitals).join(Appointment, Vitals.appointment_id == Appointment.id).filter(
+        Appointment.id == appointment_id, Vitals.patient_id == Appointment.patient_id
+    ).first()
     if not vitals:
         raise HTTPException(status_code=404, detail="Vitals not found")
     return vitals
@@ -33,6 +43,7 @@ def update_vitals(vitals_id: int, vitals_update: VitalsCreate, db: Session = Dep
     db_vitals = db.query(Vitals).filter(Vitals.id == vitals_id).first()
     if not db_vitals:
         raise HTTPException(status_code=404, detail="Vitals not found")
+    validate_vitals_appointment(db, vitals_update.appointment_id, vitals_update.patient_id)
     
     for var, value in vitals_update.model_dump(exclude_unset=True).items():
         setattr(db_vitals, var, value)

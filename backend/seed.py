@@ -1,9 +1,10 @@
+import os
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
-from app.models import user, patient, clinical, lab_result
+from app.models import user, patient, clinical, lab_result, mobile
 from sqlalchemy import inspect, text
 from app.models.lis_connector import LISConnector, PatientExternalIdentity, ExternalLabOrder
-from app.core.security import get_password_hash
+from app.core.security import LEGACY_DEMO_PASSWORDS, get_password_hash, verify_password
 from app.core.lis_migrations import migrate_patient_identity_uniqueness
 
 def run_emr_auto_migrations():
@@ -62,6 +63,7 @@ def seed_db():
     patient.Base.metadata.create_all(bind=engine)
     clinical.Base.metadata.create_all(bind=engine)
     lab_result.Base.metadata.create_all(bind=engine)
+    mobile.Base.metadata.create_all(bind=engine)
     LISConnector.metadata.create_all(bind=engine)
     PatientExternalIdentity.metadata.create_all(bind=engine)
     ExternalLabOrder.metadata.create_all(bind=engine)
@@ -128,50 +130,32 @@ def seed_db():
                     role.permissions.append(perm)
         db.commit()
 
-        # Check if admin user exists
-        admin_user = db.query(user.User).filter(user.User.username == "admin").first()
-        if not admin_user:
-            admin_user = user.User(
+        bootstrap_password = os.getenv("EMR_BOOTSTRAP_ADMIN_PASSWORD")
+        if bootstrap_password and (
+            not 16 <= len(bootstrap_password.encode("utf-8")) <= 72
+            or bootstrap_password in LEGACY_DEMO_PASSWORDS.values()
+        ):
+            raise ValueError("EMR_BOOTSTRAP_ADMIN_PASSWORD must contain 16 to 72 UTF-8 bytes")
+
+        legacy_users = db.query(user.User).filter(user.User.username.in_(LEGACY_DEMO_PASSWORDS)).all()
+        existing_admin = next((account for account in legacy_users if account.username == "admin"), None)
+        for account in legacy_users:
+            if not account.hashed_password or not verify_password(LEGACY_DEMO_PASSWORDS[account.username], account.hashed_password):
+                continue
+            db.query(user.AuthSession).filter(
+                user.AuthSession.user_id == account.id, user.AuthSession.revoked.is_(False)
+            ).update({user.AuthSession.revoked: True}, synchronize_session=False)
+            if account.username == "admin" and bootstrap_password and account.role_id == admin_role.id:
+                account.hashed_password = get_password_hash(bootstrap_password)
+
+        if existing_admin is None and bootstrap_password:
+            db.add(user.User(
                 username="admin",
                 email="admin@emr.com",
-                hashed_password=get_password_hash("admin123"),
-                role_id=admin_role.id
-            )
-            db.add(admin_user)
-            db.commit()
-
-        doctor_user = db.query(user.User).filter(user.User.username == "doctor").first()
-        if not doctor_user:
-            doctor_user = user.User(
-                username="doctor",
-                email="doctor@emr.com",
-                hashed_password=get_password_hash("doctor123"),
-                role_id=doctor_role.id
-            )
-            db.add(doctor_user)
-            db.commit()
-
-        frontdesk_user = db.query(user.User).filter(user.User.username == "frontdesk").first()
-        if not frontdesk_user:
-            frontdesk_user = user.User(
-                username="frontdesk",
-                email="frontdesk@emr.com",
-                hashed_password=get_password_hash("frontdesk123"),
-                role_id=frontdesk_role.id
-            )
-            db.add(frontdesk_user)
-            db.commit()
-
-        pharmacist_user = db.query(user.User).filter(user.User.username == "pharmacist").first()
-        if not pharmacist_user:
-            pharmacist_user = user.User(
-                username="pharmacist",
-                email="pharmacist@emr.com",
-                hashed_password=get_password_hash("pharmacist123"),
-                role_id=pharmacist_role.id
-            )
-            db.add(pharmacist_user)
-            db.commit()
+                hashed_password=get_password_hash(bootstrap_password),
+                role_id=admin_role.id,
+            ))
+        db.commit()
 
         # Create default system settings
         from app.models.settings import SystemSetting

@@ -46,6 +46,7 @@ class Appointment(Base):
     appointment_time = Column(DateTime, default=datetime.utcnow, index=True)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     token_number = Column(String, nullable=True)
+    reason_for_visit = Column(Text, nullable=True)
 
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("User")

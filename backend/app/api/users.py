@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.models.user import User, Role, Permission, UserTab
+from app.models.user import User, Role, Permission, UserTab, AuthSession
 from app.schemas.user import User as UserSchema, UserCreate, Role as RoleSchema, RoleCreate, Permission as PermissionSchema, PermissionCreate, UserTabsUpdate
 from app.api.deps import RequirePermission, get_current_user
 from app.core.security import get_password_hash
@@ -88,7 +88,7 @@ async def upload_signature(
     if file.content_type not in {"image/jpeg", "image/png", "application/pdf"}:
         raise HTTPException(status_code=400, detail="Invalid MIME type")
 
-    content = await file.read()
+    content = await file.read(5 * 1024 * 1024 + 1)
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB")
 
@@ -108,8 +108,10 @@ async def upload_signature(
     db.refresh(db_user)
     return db_user
 
-@router.get("/{user_id}/signature/image", dependencies=[Depends(get_current_user)])
-def get_signature_image(user_id: int, db: Session = Depends(get_db)):
+@router.get("/{user_id}/signature/image")
+def get_signature_image(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        RequirePermission("manage_users")(current_user=current_user, db=db)
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user or not db_user.signature_path:
         raise HTTPException(status_code=404, detail="Signature not found")
@@ -133,6 +135,8 @@ def update_user(user_id: int, user_update: UserCreate, db: Session = Depends(get
     db_user.email = user_update.email
     db_user.role_id = user_update.role_id
     db_user.is_active = user_update.is_active
+    if not user_update.is_active or user_update.password:
+        db.query(AuthSession).filter(AuthSession.user_id == user_id).update({AuthSession.revoked: True})
     if user_update.password:
         db_user.hashed_password = get_password_hash(user_update.password)
         
@@ -147,6 +151,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     
     db_user.is_active = False # soft delete
+    db.query(AuthSession).filter(AuthSession.user_id == user_id).update({AuthSession.revoked: True})
     db.commit()
     return {"detail": "User deactivated successfully"}
 

@@ -11,6 +11,9 @@ export const apiClient = axios.create({
   },
 });
 
+// Concurrent 401 responses must share one refresh: refresh tokens are single-use.
+let refreshInFlight: Promise<string> | null = null;
+
 apiClient.interceptors.request.use((config) => {
   const { token } = useAuthStore.getState();
   if (token && config.headers) {
@@ -24,26 +27,35 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
 
       const { refreshToken, updateTokens, logout } = useAuthStore.getState();
 
       if (refreshToken) {
         try {
-          const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-
-          const { access_token, refresh_token: new_refresh_token } = response.data;
-
-          updateTokens(access_token, new_refresh_token);
-
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          // A late response may belong to the token already replaced by a refresh.
+          const currentToken = useAuthStore.getState().token;
+          let accessToken = currentToken;
+          if (!currentToken || originalRequest.headers.Authorization === `Bearer ${currentToken}`) {
+            if (!refreshInFlight) {
+              refreshInFlight = axios.post(`${API_BASE_URL}/api/auth/refresh`, {
+                refresh_token: refreshToken,
+              }).then(({ data }) => {
+                if (useAuthStore.getState().refreshToken !== refreshToken) {
+                  throw new Error('Session changed during refresh');
+                }
+                updateTokens(data.access_token, data.refresh_token);
+                return data.access_token as string;
+              }).finally(() => { refreshInFlight = null; });
+            }
+            accessToken = await refreshInFlight;
+          }
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
           // If refresh token is invalid or expired
-          logout();
+          if (useAuthStore.getState().refreshToken === refreshToken) logout();
           return Promise.reject(refreshError);
         }
       } else {

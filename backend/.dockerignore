@@ -4,7 +4,6 @@ venv
 emr.db
 uploads/
 secure_uploads/
-alembic/
 .git
 *.db
 *.db-*

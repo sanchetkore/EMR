@@ -5,9 +5,12 @@ from slowapi import _rate_limit_exceeded_handler
 from app.core.limiter import limiter
 from app.api import auth, users, patients, appointments, clinical, billing, settings, encounters, allergies, medical_problems, medications, prescriptions, immunizations, lab_results, insurance, facilities, documents, messages, visits, drugs, queue, clinic, pharmacy, dashboard, ws, templates, media, lis_integration
 import os
+import logging
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="EMR Backend")
+from app.core.request_limits import RequestBodyLimitMiddleware
+app.add_middleware(RequestBodyLimitMiddleware)
 
 from app.api import ai_documentation, patient_brain
 app.include_router(ai_documentation.router, prefix="/api/ai", tags=["ai-documentation"])
@@ -15,6 +18,16 @@ app.include_router(patient_brain.router, prefix="/api", tags=["patient-brain"])
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+class RedactMediaAccessPath(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str) and args[2].startswith("/api/media/"):
+            record.args = (*args[:2], "/api/media/[redacted]", *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(RedactMediaAccessPath())
 
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 
@@ -34,6 +47,10 @@ async def add_security_headers(request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000"
     response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if (request.headers.get("authorization")
+            or request.url.path.startswith(("/api/mobile/", "/api/auth/", "/api/media/"))):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -64,20 +81,18 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(ws.router, prefix="/api/ws", tags=["websocket"])
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["templates"])
 app.include_router(media.router, prefix="/api/media", tags=["media"])
+from app.api.mobile import mobile_router
+app.include_router(mobile_router, prefix="/api", tags=["mobile"])
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 if not os.path.exists("public_assets"):
     os.makedirs("public_assets")
-app.mount("/api/public_assets", StaticFiles(directory="public_assets"), name="public_assets")
+app.mount("/api/public_assets", StaticFiles(directory="public_assets", follow_symlink=False), name="public_assets")
 
 @app.on_event("startup")
 def on_startup():
-    try:
-        import seed
-        seed.seed_db()
-    except Exception as e:
-        print(f"Error seeding database: {e}")
-        raise
+    import seed
+    seed.seed_db()
 
 @app.get("/")
 def read_root():
